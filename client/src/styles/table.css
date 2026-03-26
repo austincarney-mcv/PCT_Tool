@@ -1,0 +1,121 @@
+/* Dense data table — the primary UI pattern for the PCT app */
+
+.data-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.data-table thead tr {
+  background: var(--color-primary);
+}
+
+.data-table thead th {
+  color: var(--color-white);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-align: left;
+  padding: 6px 8px;
+  border-right: 1px solid rgba(255,255,255,0.15);
+  white-space: nowrap;
+  user-select: none;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.data-table thead th:last-child { border-right: none; }
+.data-table thead th.sortable { cursor: pointer; }
+.data-table thead th.sortable:hover { background: var(--color-primary-lt); }
+.data-table thead th .sort-icon { margin-left: 4px; opacity: 0.5; }
+.data-table thead th.sorted   { background: var(--color-primary-lt); }
+.data-table thead th.sorted .sort-icon { opacity: 1; }
+
+.data-table tbody tr {
+  border-bottom: 1px solid var(--color-border);
+}
+.data-table tbody tr:last-child { border-bottom: none; }
+.data-table tbody tr:hover { background: #f9fafb; }
+.data-table tbody tr.selected { background: #eff6ff; }
+
+.data-table tbody td {
+  padding: 5px 8px;
+  vertical-align: middle;
+  border-right: 1px solid var(--color-border);
+  color: var(--color-text);
+  max-width: 300px;
+}
+.data-table tbody td:last-child { border-right: none; }
+
+/* Discipline group header row */
+.data-table tbody tr.group-header td {
+  background: var(--color-secondary);
+  font-weight: 600;
+  font-size: var(--font-size-xs);
+  padding: 4px 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-primary);
+}
+
+/* Numeric / currency cells */
+.data-table td.num,
+.data-table td.currency {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+}
+
+/* Editable cell */
+.editable-cell {
+  cursor: text;
+  min-width: 60px;
+  border-radius: 2px;
+  padding: 2px 4px;
+}
+.editable-cell:hover { background: #f0f9f4; outline: 1px solid var(--color-primary-lt); }
+.editable-cell.editing {
+  padding: 0;
+  background: #fff;
+  outline: 2px solid var(--color-primary);
+  outline-offset: -1px;
+}
+.editable-cell input,
+.editable-cell select,
+.editable-cell textarea {
+  width: 100%;
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  border: none;
+  outline: none;
+  padding: 2px 4px;
+  background: transparent;
+}
+.editable-cell textarea { resize: none; min-height: 48px; }
+.editable-cell.error { outline: 2px solid var(--color-negative); }
+
+/* Action column (edit/delete icons) */
+.data-table td.actions {
+  width: 60px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Pagination bar */
+.table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  background: #fafafa;
+}

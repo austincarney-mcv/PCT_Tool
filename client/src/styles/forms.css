@@ -1,0 +1,89 @@
+/* Form inputs, selects, labels */
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: var(--space-4);
+}
+
+.form-label {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border-dk);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  color: var(--color-text);
+  background: var(--color-surface);
+  transition: border-color 0.12s;
+}
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(42,71,53,0.12);
+}
+.form-input::placeholder { color: var(--color-text-light); }
+.form-textarea { resize: vertical; min-height: 72px; }
+
+.form-row {
+  display: grid;
+  gap: var(--space-4);
+}
+.form-row.cols-2 { grid-template-columns: 1fr 1fr; }
+.form-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+/* Inline search/filter bar */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  flex-wrap: wrap;
+}
+.filter-bar .filter-input {
+  padding: 5px 10px;
+  border: 1px solid var(--color-border-dk);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  width: 220px;
+}
+.filter-bar .filter-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+/* Tab-strip filter (e.g. discipline filter) */
+.tab-strip {
+  display: flex;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+.tab-strip .tab {
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  border: 1px solid var(--color-border-dk);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  transition: all 0.1s;
+}
+.tab-strip .tab:hover { background: var(--color-secondary); color: var(--color-primary); }
+.tab-strip .tab.active {
+  background: var(--color-primary);
+  color: var(--color-white);
+  border-color: var(--color-primary);
+}
