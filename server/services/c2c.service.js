@@ -217,6 +217,13 @@ function getStageView(projectId, phase) {
     resourceMap.get(alloc.resource_id).utilisation_by_snapshot[alloc.snapshot_id] = alloc.weekly_utilisation;
   }
 
+  // Fill any snapshot gaps with 0 so every resource has an entry for every week
+  for (const res of resourceMap.values()) {
+    for (const sid of snapshotIds) {
+      if (!(sid in res.utilisation_by_snapshot)) res.utilisation_by_snapshot[sid] = 0;
+    }
+  }
+
   const resources = Array.from(resourceMap.values())
     .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 

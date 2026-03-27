@@ -478,12 +478,12 @@ function StageView({ data }) {
                         const util = res.utilisation_by_snapshot[snap.id]
                         return (
                           <td key={snap.id} className="num">
-                            {util != null && util > 0 ? `${(util * 100).toFixed(0)}%` : '—'}
+                            {util != null && util > 0 ? `${(util * 100).toFixed(0)}%` : '0%'}
                           </td>
                         )
                       })}
-                      <td className="num">{totalHours > 0 ? totalHours.toFixed(1) : '—'}</td>
-                      <td className="num">{phaseCTC > 0 ? fmtCents(phaseCTC) : '—'}</td>
+                      <td className="num">{totalHours.toFixed(1)}</td>
+                      <td className="num">{fmtCents(phaseCTC)}</td>
                     </tr>
                   )
                 }),
@@ -492,8 +492,8 @@ function StageView({ data }) {
                   <td colSpan={nFixed + snapshots.length} style={{ textAlign: 'right', paddingRight: 12 }}>
                     {disc} Total
                   </td>
-                  <td className="num">{discTotalHrs > 0 ? discTotalHrs.toFixed(1) : '—'}</td>
-                  <td className="num">{discPhaseCTC > 0 ? fmtCents(discPhaseCTC) : '—'}</td>
+                  <td className="num">{discTotalHrs.toFixed(1)}</td>
+                  <td className="num">{fmtCents(discPhaseCTC)}</td>
                 </tr>,
               ]
             })}
