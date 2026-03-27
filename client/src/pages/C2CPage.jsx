@@ -626,7 +626,7 @@ export default function C2CPage() {
     ? Math.max(...filteredSnaps.map(s => s.week_number)) + 1
     : 1
 
-  const { data: stageData, isLoading: loadingStage } = useQuery({
+  const { data: stageData, isPending: loadingStage, isError: stageError, error: stageErrorObj } = useQuery({
     queryKey: ['c2c-stage-view', projectId, phaseFilter],
     queryFn: () => c2cApi.getStageView(projectId, phaseFilter),
     enabled: !!projectId,
@@ -711,14 +711,13 @@ export default function C2CPage() {
 
       {/* ── Stage View ── */}
       {stageView && (
-        loadingStage ? <LoadingSpinner /> : (
-          stageData ? (
-            <StageView
-              key={`${phaseFilter}-${stageData.snapshots.length}`}
-              data={stageData}
-            />
-          ) : null
-        )
+        loadingStage
+          ? <LoadingSpinner />
+          : stageError
+            ? <div className="error-banner">{stageErrorObj?.response?.data?.error || stageErrorObj?.message || 'Failed to load Stage View'}</div>
+            : stageData && stageData.snapshots?.length > 0
+              ? <StageView key={`${phaseFilter}-${stageData.snapshots.length}`} data={stageData} />
+              : <div className="empty-state card" style={{ padding: 32 }}>No {phaseFilter} weeks found. Add a week first.</div>
       )}
 
       {/* ── Per-Week Snapshot View ── */}
