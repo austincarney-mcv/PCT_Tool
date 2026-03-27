@@ -44,13 +44,26 @@ function makeWeekLabel(weekNum, dateStr) {
 
 // ─── Add Week Modal ───────────────────────────────────────────────────────────
 
-function AddWeekModal({ projectId, phase, nextWeekNumber, existingSnaps, onClose }) {
+// Immutable field style — darker background signals the field cannot be edited
+const IMMUTABLE_STYLE = {
+  background: '#dde3e8',
+  color: 'var(--color-text)',
+  cursor: 'not-allowed',
+}
+
+function AddWeekModal({ projectId, initialPhase, allSnapshots, onClose }) {
   const qc = useQueryClient()
+  const [phase, setPhase] = useState(initialPhase)
   const [snapshotDate, setSnapshotDate] = useState(getCurrentMonday)
   const [error, setError] = useState(null)
 
+  // Recompute week number and duplicate check whenever phase or date changes
+  const phaseSnaps = allSnapshots.filter(s => s.phase === phase)
+  const nextWeekNumber = phaseSnaps.length > 0
+    ? Math.max(...phaseSnaps.map(s => s.week_number)) + 1
+    : 1
   const weekLabel = makeWeekLabel(nextWeekNumber, snapshotDate)
-  const isDuplicate = existingSnaps.some(s => s.snapshot_date === snapshotDate)
+  const isDuplicate = phaseSnaps.some(s => s.snapshot_date === snapshotDate)
 
   const mut = useMutation({
     mutationFn: d => c2cApi.createSnapshot(projectId, d),
@@ -72,21 +85,26 @@ function AddWeekModal({ projectId, phase, nextWeekNumber, existingSnaps, onClose
     )
   }
 
-  const phaseLabel = phase === 'design' ? 'Design Documentation' : 'Construction Services'
-
   return (
     <Modal title="Add Week" onClose={onClose} size="sm">
       <form onSubmit={handleSubmit}>
         <div className="form-row cols-2">
           <FormField label="Phase">
-            <input className="form-input" value={phaseLabel} disabled />
+            <select
+              className="form-select"
+              value={phase}
+              onChange={e => { setPhase(e.target.value); setError(null) }}
+            >
+              <option value="design">Design Documentation</option>
+              <option value="construction">Construction Services</option>
+            </select>
           </FormField>
           <FormField label="Week Number">
-            <input className="form-input" type="number" value={nextWeekNumber} disabled />
+            <input className="form-input" type="number" value={nextWeekNumber} readOnly style={IMMUTABLE_STYLE} />
           </FormField>
         </div>
         <FormField label="Week Label">
-          <input className="form-input" value={weekLabel || '—'} disabled />
+          <input className="form-input" value={weekLabel || '—'} readOnly style={IMMUTABLE_STYLE} />
         </FormField>
         <FormField label="Week Starting (Monday)" hint="Select any date — it will snap to the Monday of that week">
           <input
@@ -436,9 +454,8 @@ export default function C2CPage() {
       {showNew && (
         <AddWeekModal
           projectId={projectId}
-          phase={phaseFilter}
-          nextWeekNumber={nextWeekNumber}
-          existingSnaps={filteredSnaps}
+          initialPhase={phaseFilter}
+          allSnapshots={snapshots}
           onClose={() => setShowNew(false)}
         />
       )}
