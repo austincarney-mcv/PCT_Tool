@@ -91,7 +91,16 @@ function trend(req, res) {
   res.json(svc.getTrend(req.params.id));
 }
 
+function stageView(req, res) {
+  const { phase } = req.query;
+  if (!phase || !['design', 'construction'].includes(phase)) {
+    return res.status(400).json({ error: 'phase query param must be "design" or "construction"' });
+  }
+  res.json(svc.getStageView(req.params.id, phase));
+}
+
 module.exports = {
   listSnapshots, getSnapshot, createSnapshot, lockSnapshot,
-  getAllocations, updateAllocations, getFinancials, updateFinancials, trend,
+  getAllocations, updateAllocations, getFinancials, updateFinancials,
+  trend, stageView,
 };

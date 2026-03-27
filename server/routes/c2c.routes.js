@@ -9,6 +9,7 @@ router.post('/snapshots', auth, c.createSnapshot);
 router.get('/snapshots/:sid', auth, c.getSnapshot);
 router.put('/snapshots/:sid/lock', auth, c.lockSnapshot);
 router.get('/trend', auth, c.trend);
+router.get('/stage-view', auth, c.stageView);
 
 // Allocations and financials (by snapshot id)
 router.get('/snapshots/:sid/allocations', auth, c.getAllocations);

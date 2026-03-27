@@ -171,6 +171,66 @@ function lockSnapshot(snapshotId) {
   db.prepare('UPDATE c2c_snapshots SET snapshot_locked = 1 WHERE id = ?').run(snapshotId);
 }
 
+function getStageView(projectId, phase) {
+  const db = getDb();
+
+  // 1. All snapshots for this project+phase ordered by week_number
+  const snapshots = db.prepare(`
+    SELECT id, week_number, week_label
+    FROM c2c_snapshots
+    WHERE project_id = ? AND phase = ?
+    ORDER BY week_number
+  `).all(projectId, phase);
+
+  if (snapshots.length === 0) return { snapshots: [], resources: [], financials: [] };
+
+  const snapshotIds = snapshots.map(s => s.id);
+  const placeholders = snapshotIds.map(() => '?').join(',');
+
+  // 2. All allocations across those snapshots joined with team_resources
+  const allAllocations = db.prepare(`
+    SELECT cra.snapshot_id, cra.weekly_utilisation,
+           tr.id   AS resource_id,
+           tr.name AS resource_name,
+           tr.discipline,
+           tr.hourly_rate,
+           tr.sort_order
+    FROM c2c_resource_allocations cra
+    JOIN team_resources tr ON tr.id = cra.resource_id
+    WHERE cra.snapshot_id IN (${placeholders})
+    ORDER BY tr.discipline, tr.sort_order, tr.name
+  `).all(...snapshotIds);
+
+  // 3. Build resource map keyed by resource_id
+  const resourceMap = new Map();
+  for (const alloc of allAllocations) {
+    if (!resourceMap.has(alloc.resource_id)) {
+      resourceMap.set(alloc.resource_id, {
+        resource_id:             alloc.resource_id,
+        resource_name:           alloc.resource_name,
+        discipline:              alloc.discipline,
+        hourly_rate:             alloc.hourly_rate,
+        sort_order:              alloc.sort_order,
+        utilisation_by_snapshot: {},
+      });
+    }
+    resourceMap.get(alloc.resource_id).utilisation_by_snapshot[alloc.snapshot_id] = alloc.weekly_utilisation;
+  }
+
+  const resources = Array.from(resourceMap.values())
+    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+  // 4. fee_less_wip per discipline from the latest snapshot's financials
+  const latestId = snapshotIds[snapshotIds.length - 1];
+  const financials = db.prepare(`
+    SELECT discipline, fee_less_wip
+    FROM c2c_discipline_financials
+    WHERE snapshot_id = ?
+  `).all(latestId);
+
+  return { snapshots, resources, financials };
+}
+
 function getTrend(projectId) {
   const db = getDb();
   return db.prepare(`
@@ -188,4 +248,5 @@ function getTrend(projectId) {
 module.exports = {
   getSnapshot, getAllocations, getFinancials, createSnapshot,
   updateAllocations, updateFinancials, lockSnapshot, getTrend, recalcDisciplineCosts,
+  getStageView,
 };

@@ -318,6 +318,193 @@ function CSFinancialsTable({ financials, locked, onUpdateFinancial }) {
   )
 }
 
+// ─── Stage View ───────────────────────────────────────────────────────────────
+// Pivot table: all weeks of a phase as columns, one row per resource.
+//
+// Formulas:
+//   Total Hours (resource)  = SUM(utilisation_w × 37.5)  across all phase snapshots
+//   Phase CTC (resource)    = Total Hours × hourly_rate
+//   CTC Phase (discipline)  = SUM(Phase CTC) for all resources in that discipline
+//   Residual                = Fee less WIP − CTC Phase
+//
+// TODO: Fee less WIP is a $1,000 placeholder pending external finance DB integration. Revisit.
+
+function StageFinancialsTable({ snapshots, resources, financials }) {
+  const colWidths = [160, 130, 130, 120]
+  const { widths, startResize } = useColumnResize(colWidths)
+
+  const headers = [
+    { label: 'Discipline',   align: 'left' },
+    { label: 'Fee less WIP', align: 'right' },
+    { label: 'CTC Phase',    align: 'right' },
+    { label: 'Residual',     align: 'right' },
+  ]
+
+  // CTC Phase per discipline = sum of (total_hours × rate) across all resources
+  const discCtcMap = {}
+  for (const res of resources) {
+    const totalHours = snapshots.reduce((sum, snap) =>
+      sum + (res.utilisation_by_snapshot[snap.id] ?? 0) * 37.5, 0)
+    discCtcMap[res.discipline] = (discCtcMap[res.discipline] || 0) + totalHours * res.hourly_rate
+  }
+  const discFinMap = Object.fromEntries(financials.map(f => [f.discipline, f]))
+
+  // Only show disciplines that have resources or financials
+  const activeDiscs = DISCIPLINES.filter(d => discCtcMap[d] || discFinMap[d])
+
+  const totFlw = activeDiscs.reduce((s, d) => s + (discFinMap[d]?.fee_less_wip ?? 1000), 0)
+  const totCtc = activeDiscs.reduce((s, d) => s + (discCtcMap[d] || 0), 0)
+  const totRes = totFlw - totCtc
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-primary)', marginBottom: 8 }}>Financial Summary</h3>
+      <div className="data-table-wrap">
+        <table className="data-table" style={{ tableLayout: 'fixed' }}>
+          <colgroup>{colWidths.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
+          <thead>
+            <tr>
+              {headers.map((h, ci) => (
+                <th key={ci} style={{ textAlign: h.align }}>
+                  {h.label}
+                  <div className="col-resize-handle" onMouseDown={e => startResize(ci, e)} onClick={e => e.stopPropagation()} />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {activeDiscs.map(disc => {
+              const feeLessWip = discFinMap[disc]?.fee_less_wip ?? 1000
+              const ctcPhase   = discCtcMap[disc] || 0
+              const residual   = feeLessWip - ctcPhase
+              const resColor   = residual > 0 ? 'var(--color-positive)' : residual < 0 ? 'var(--color-negative)' : undefined
+              return (
+                <tr key={disc}>
+                  <td style={{ fontWeight: 500 }}>{disc}</td>
+                  <td className="num">{fmt(feeLessWip)}</td>
+                  <td className="num">{fmt(ctcPhase)}</td>
+                  <td className="num" style={{ color: resColor, fontWeight: 600 }}>{fmt(residual)}</td>
+                </tr>
+              )
+            })}
+            {activeDiscs.length > 0 && (
+              <tr style={{ background: 'var(--color-secondary)', fontWeight: 700 }}>
+                <td>TOTAL</td>
+                <td className="num">{fmt(totFlw)}</td>
+                <td className="num">{fmt(totCtc)}</td>
+                <td className="num" style={{ color: totRes >= 0 ? 'var(--color-positive)' : 'var(--color-negative)', fontWeight: 700 }}>{fmt(totRes)}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function StageView({ data }) {
+  const { snapshots, resources, financials } = data
+  const nFixed = 2  // Resource + Rate
+  const nTrail = 2  // Total Hrs + Phase CTC
+  const colWidths = [200, 90, ...snapshots.map(() => 80), 100, 120]
+  const { widths, startResize } = useColumnResize(colWidths)
+
+  const NCOLS = nFixed + snapshots.length + nTrail
+
+  // Group resources by discipline preserving DISCIPLINES order
+  const grouped = DISCIPLINES.reduce((acc, disc) => {
+    acc[disc] = resources.filter(r => r.discipline === disc)
+    return acc
+  }, {})
+
+  return (
+    <>
+      <div className="data-table-wrap">
+        <table className="data-table" style={{ tableLayout: 'fixed' }}>
+          <colgroup>
+            {widths.map((w, i) => <col key={i} style={{ width: w }} />)}
+          </colgroup>
+          <thead>
+            <tr>
+              {/* Fixed: Resource, Rate */}
+              {[{ label: 'Resource', align: 'left' }, { label: 'Rate ($/hr)', align: 'right' }].map((h, ci) => (
+                <th key={ci} style={{ textAlign: h.align }}>
+                  {h.label}
+                  <div className="col-resize-handle" onMouseDown={e => startResize(ci, e)} onClick={e => e.stopPropagation()} />
+                </th>
+              ))}
+              {/* Dynamic: one column per week snapshot */}
+              {snapshots.map((snap, si) => (
+                <th key={snap.id} style={{ textAlign: 'right' }}>
+                  W{snap.week_number}
+                  <div className="col-resize-handle" onMouseDown={e => startResize(nFixed + si, e)} onClick={e => e.stopPropagation()} />
+                </th>
+              ))}
+              {/* Trailing: Total Hrs, Phase CTC */}
+              {[{ label: 'Total Hrs', ci: nFixed + snapshots.length }, { label: 'Phase CTC', ci: nFixed + snapshots.length + 1 }].map(h => (
+                <th key={h.label} style={{ textAlign: 'right' }}>
+                  {h.label}
+                  <div className="col-resize-handle" onMouseDown={e => startResize(h.ci, e)} onClick={e => e.stopPropagation()} />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {DISCIPLINES.map(disc => {
+              const group = grouped[disc]
+              if (!group || group.length === 0) return null
+
+              // Discipline subtotals
+              const discTotalHrs = group.reduce((sum, res) =>
+                sum + snapshots.reduce((s2, snap) => s2 + (res.utilisation_by_snapshot[snap.id] ?? 0) * 37.5, 0), 0)
+              const discPhaseCTC = group.reduce((sum, res) => {
+                const hrs = snapshots.reduce((s2, snap) => s2 + (res.utilisation_by_snapshot[snap.id] ?? 0) * 37.5, 0)
+                return sum + hrs * res.hourly_rate
+              }, 0)
+
+              return [
+                <tr key={`hdr-${disc}`} className="group-header">
+                  <td colSpan={NCOLS}>{disc} Resource Program</td>
+                </tr>,
+                ...group.map(res => {
+                  const totalHours = snapshots.reduce((sum, snap) =>
+                    sum + (res.utilisation_by_snapshot[snap.id] ?? 0) * 37.5, 0)
+                  const phaseCTC = totalHours * res.hourly_rate
+                  return (
+                    <tr key={res.resource_id}>
+                      <td>{res.resource_name}</td>
+                      <td className="num">{fmt(res.hourly_rate)}</td>
+                      {snapshots.map(snap => {
+                        const util = res.utilisation_by_snapshot[snap.id]
+                        return (
+                          <td key={snap.id} className="num">
+                            {util != null && util > 0 ? `${(util * 100).toFixed(0)}%` : '—'}
+                          </td>
+                        )
+                      })}
+                      <td className="num">{totalHours > 0 ? totalHours.toFixed(1) : '—'}</td>
+                      <td className="num">{phaseCTC > 0 ? fmtCents(phaseCTC) : '—'}</td>
+                    </tr>
+                  )
+                }),
+                // Discipline subtotal row
+                <tr key={`sub-${disc}`} style={{ background: 'var(--color-tertiary)', fontWeight: 600, fontSize: 12 }}>
+                  <td colSpan={nFixed + snapshots.length} style={{ textAlign: 'right', paddingRight: 12 }}>
+                    {disc} Total
+                  </td>
+                  <td className="num">{discTotalHrs > 0 ? discTotalHrs.toFixed(1) : '—'}</td>
+                  <td className="num">{discPhaseCTC > 0 ? fmtCents(discPhaseCTC) : '—'}</td>
+                </tr>,
+              ]
+            })}
+          </tbody>
+        </table>
+      </div>
+      <StageFinancialsTable snapshots={snapshots} resources={resources} financials={financials} />
+    </>
+  )
+}
+
 // ─── Financials Table — Design Documentation (full) ──────────────────────────
 
 const FIN_COL_WIDTHS = [160, 110, 120, 100, 130, 120, 130, 120, 100]
@@ -417,6 +604,7 @@ export default function C2CPage() {
   const [selectedSnapshotId, setSelectedSnapshotId] = useState(null)
   const [phaseFilter, setPhaseFilter] = useState('design')
   const [showNew, setShowNew] = useState(false)
+  const [stageView, setStageView] = useState(false)
 
   const { data: snapshots = [], isLoading: loadingSnaps } = useQuery({
     queryKey: ['c2c-snapshots', projectId],
@@ -437,6 +625,12 @@ export default function C2CPage() {
   const nextWeekNumber = filteredSnaps.length > 0
     ? Math.max(...filteredSnaps.map(s => s.week_number)) + 1
     : 1
+
+  const { data: stageData, isLoading: loadingStage } = useQuery({
+    queryKey: ['c2c-stage-view', projectId, phaseFilter],
+    queryFn: () => c2cApi.getStageView(projectId, phaseFilter),
+    enabled: !!projectId && stageView,
+  })
 
   const { data: snapDetail, isLoading: loadingDetail } = useQuery({
     queryKey: ['c2c-snapshot', selectedSnapshotId],
@@ -476,80 +670,106 @@ export default function C2CPage() {
         </>}
       />
 
-      {/* Phase toggle */}
+      {/* View mode + Phase toggle — all three buttons sit in a single strip.
+          Clicking Stage View enters the pivot view for the current phase.
+          Clicking Design Documentation or Construction Services exits Stage View
+          and shows the per-week snapshot view for that phase. */}
       <div className="tab-strip mb-4">
-        {['design','construction'].map(phase => (
+        <button
+          className={`tab${stageView ? ' active' : ''}`}
+          onClick={() => setStageView(true)}
+        >
+          Stage View
+        </button>
+        {['design', 'construction'].map(phase => (
           <button
             key={phase}
-            className={`tab${phaseFilter === phase ? ' active' : ''}`}
-            onClick={() => { setPhaseFilter(phase); setSelectedSnapshotId(null) }}
+            className={`tab${!stageView && phaseFilter === phase ? ' active' : ''}`}
+            onClick={() => { setStageView(false); setPhaseFilter(phase); setSelectedSnapshotId(null) }}
           >
             {phase === 'design' ? 'Design Documentation' : 'Construction Services'}
           </button>
         ))}
       </div>
 
-      {/* Snapshot selector */}
-      {filteredSnaps.length > 0 && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 600 }}>WEEK:</span>
-          {filteredSnaps.map(s => (
-            <button
-              key={s.id}
-              onClick={() => setSelectedSnapshotId(s.id)}
-              style={{
-                padding: '3px 12px',
-                borderRadius: 3,
-                border: '1px solid var(--color-border-dk)',
-                background: s.id === selectedSnapshotId ? 'var(--color-primary)' : '#fff',
-                color: s.id === selectedSnapshotId ? '#fff' : 'var(--color-text)',
-                fontSize: 12, cursor: 'pointer',
-                fontWeight: s.id === selectedSnapshotId ? 600 : 400,
-              }}
-            >
-              W{s.week_number} {s.snapshot_locked ? '🔒' : ''}
-            </button>
-          ))}
-        </div>
+      {/* ── Stage View ── */}
+      {stageView && (
+        loadingStage ? <LoadingSpinner /> : (
+          stageData ? (
+            <StageView
+              key={`${phaseFilter}-${stageData.snapshots.length}`}
+              data={stageData}
+            />
+          ) : null
+        )
       )}
 
-      {filteredSnaps.length === 0 && (
-        <div className="empty-state card" style={{ padding: 32 }}>
-          No {phaseFilter} weeks yet. Click &ldquo;+ Add Week&rdquo; to create the first weekly entry.
-        </div>
-      )}
-
-      {activeSnap && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <div>
-            <span style={{ fontWeight: 600, fontSize: 14 }}>{activeSnap.week_label}</span>
-            <span style={{ marginLeft: 12, fontSize: 12, color: 'var(--color-text-muted)' }}>{activeSnap.snapshot_date}</span>
-            {locked && <span style={{ marginLeft: 8, background: 'var(--color-tertiary)', color: 'var(--color-primary)', padding: '2px 8px', borderRadius: 3, fontSize: 11, fontWeight: 600 }}>LOCKED</span>}
-          </div>
-          {!locked && (
-            <button className="btn btn-secondary btn-sm" onClick={() => lockMut.mutate()}>🔒 Lock Week</button>
-          )}
-        </div>
-      )}
-
-      {loadingDetail && <LoadingSpinner />}
-
-      {snapDetail && !loadingDetail && (
+      {/* ── Per-Week Snapshot View ── */}
+      {!stageView && (
         <>
-          <AllocationTable
-            snapshot={activeSnap}
-            allocations={allocations}
-            locked={locked}
-            onUpdateAllocation={item => updateAllocMut.mutate(item)}
-          />
-          {/* Both phases use the simplified 3-column view (Fee less WIP | CTC | Residual).
-              DesignFinancialsTable (8 columns) is preserved below for future reinstatement
-              once the Synergy/net-to-carry workflow is confirmed. */}
-          <CSFinancialsTable
-            financials={financials}
-            locked={locked}
-            onUpdateFinancial={item => updateFinMut.mutate(item)}
-          />
+          {/* Snapshot selector */}
+          {filteredSnaps.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 600 }}>WEEK:</span>
+              {filteredSnaps.map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => setSelectedSnapshotId(s.id)}
+                  style={{
+                    padding: '3px 12px',
+                    borderRadius: 3,
+                    border: '1px solid var(--color-border-dk)',
+                    background: s.id === selectedSnapshotId ? 'var(--color-primary)' : '#fff',
+                    color: s.id === selectedSnapshotId ? '#fff' : 'var(--color-text)',
+                    fontSize: 12, cursor: 'pointer',
+                    fontWeight: s.id === selectedSnapshotId ? 600 : 400,
+                  }}
+                >
+                  W{s.week_number} {s.snapshot_locked ? '🔒' : ''}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {filteredSnaps.length === 0 && (
+            <div className="empty-state card" style={{ padding: 32 }}>
+              No {phaseFilter} weeks yet. Click &ldquo;+ Add Week&rdquo; to create the first weekly entry.
+            </div>
+          )}
+
+          {activeSnap && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div>
+                <span style={{ fontWeight: 600, fontSize: 14 }}>{activeSnap.week_label}</span>
+                <span style={{ marginLeft: 12, fontSize: 12, color: 'var(--color-text-muted)' }}>{activeSnap.snapshot_date}</span>
+                {locked && <span style={{ marginLeft: 8, background: 'var(--color-tertiary)', color: 'var(--color-primary)', padding: '2px 8px', borderRadius: 3, fontSize: 11, fontWeight: 600 }}>LOCKED</span>}
+              </div>
+              {!locked && (
+                <button className="btn btn-secondary btn-sm" onClick={() => lockMut.mutate()}>🔒 Lock Week</button>
+              )}
+            </div>
+          )}
+
+          {loadingDetail && <LoadingSpinner />}
+
+          {snapDetail && !loadingDetail && (
+            <>
+              <AllocationTable
+                snapshot={activeSnap}
+                allocations={allocations}
+                locked={locked}
+                onUpdateAllocation={item => updateAllocMut.mutate(item)}
+              />
+              {/* Both phases use the simplified 3-column view (Fee less WIP | CTC | Residual).
+                  DesignFinancialsTable (8 columns) is preserved below for future reinstatement
+                  once the Synergy/net-to-carry workflow is confirmed. */}
+              <CSFinancialsTable
+                financials={financials}
+                locked={locked}
+                onUpdateFinancial={item => updateFinMut.mutate(item)}
+              />
+            </>
+          )}
         </>
       )}
 
