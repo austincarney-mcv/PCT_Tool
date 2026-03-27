@@ -8,7 +8,6 @@ import Modal from '../components/common/Modal'
 import FormField from '../components/common/FormField'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import ErrorBanner from '../components/common/ErrorBanner'
-import ImportDropzone from '../components/excel/ImportDropzone'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 function NewProjectModal({ onClose }) {
@@ -94,7 +93,6 @@ export default function DashboardPage() {
   const { projectId } = useProject()
   const qc = useQueryClient()
   const [showNew, setShowNew] = useState(false)
-  const [showImport, setShowImport] = useState(false)
 
   const { data: projects = [], isLoading, error } = useQuery({
     queryKey: ['projects'],
@@ -115,10 +113,7 @@ export default function DashboardPage() {
         title="Dashboard"
         subtitle="All projects"
         actions={
-          <>
-            <button className="btn btn-secondary btn-sm" onClick={() => setShowImport(true)}>↑ Import .xlsx</button>
-            <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}>+ New Project</button>
-          </>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}>+ New Project</button>
         }
       />
 
@@ -126,11 +121,8 @@ export default function DashboardPage() {
         <div className="empty-state card" style={{ padding: 40 }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
           <div style={{ fontWeight: 600, marginBottom: 8 }}>No projects yet</div>
-          <div style={{ marginBottom: 16 }}>Create a new project or import an existing Excel workbook.</div>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-            <button className="btn btn-secondary btn-sm" onClick={() => setShowImport(true)}>Import .xlsx</button>
-            <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}>New Project</button>
-          </div>
+          <div style={{ marginBottom: 16 }}>Create a new project to get started.</div>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}>New Project</button>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16 }}>
@@ -164,11 +156,6 @@ export default function DashboardPage() {
       )}
 
       {showNew && <NewProjectModal onClose={() => setShowNew(false)} />}
-      {showImport && (
-        <Modal title="Import Excel Workbook" onClose={() => setShowImport(false)}>
-          <ImportDropzone onSuccess={() => setShowImport(false)} />
-        </Modal>
-      )}
     </div>
   )
 }

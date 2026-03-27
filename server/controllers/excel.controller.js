@@ -1,6 +1,5 @@
 const { getDb } = require('../config/database');
 const { buildWorkbook } = require('../services/excel.export');
-const { importWorkbook } = require('../services/excel.import');
 
 async function exportProject(req, res) {
   const db = getDb();
@@ -16,16 +15,4 @@ async function exportProject(req, res) {
   res.end();
 }
 
-async function importProject(req, res) {
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const { project_number_override } = req.body;
-  try {
-    const projectId = await importWorkbook(req.file.buffer, project_number_override);
-    res.status(201).json({ project_id: projectId, message: 'Import successful' });
-  } catch (err) {
-    if (err.status === 409) return res.status(409).json({ error: err.message });
-    throw err;
-  }
-}
-
-module.exports = { exportProject, importProject };
+module.exports = { exportProject };
