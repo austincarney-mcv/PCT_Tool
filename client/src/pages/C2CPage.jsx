@@ -136,9 +136,13 @@ function AddWeekModal({ projectId, initialPhase, allSnapshots, onClose }) {
 }
 
 // ─── Allocation Table ─────────────────────────────────────────────────────────
-// Columns: Resource | Rate ($/hr) | Utilisation | Hrs/Wk | Cost to Complete
+// Columns: Resource | Rate ($/hr) | Utilisation | Hrs/Wk | Cost/Wk
 // "Remaining Wks" is intentionally hidden; the value is still passed through
 // for allocation updates so the server calculation stays correct.
+// "Cost/Wk" = rate × (utilisation × 37.5) — the dollar cost for this resource
+// in the current week at their forecast utilisation. The discipline-level CTC
+// (shown in the Financial Summary below) is the full remaining cost and is
+// derived server-side as sum(rate × util × 37.5 × remaining_weeks).
 
 const ALLOC_COL_WIDTHS = [200, 90, 90, 80, 120]
 
@@ -162,11 +166,11 @@ function AllocationTable({ snapshot, allocations, onUpdateAllocation, locked }) 
         <thead>
           <tr>
             {[
-              { label: 'Resource',          align: 'left' },
-              { label: 'Rate ($/hr)',        align: 'right' },
-              { label: 'Utilisation',        align: 'right' },
-              { label: 'Hrs/Wk',            align: 'right' },
-              { label: 'Cost to Complete',   align: 'right' },
+              { label: 'Resource',    align: 'left' },
+              { label: 'Rate ($/hr)', align: 'right' },
+              { label: 'Utilisation', align: 'right' },
+              { label: 'Hrs/Wk',     align: 'right' },
+              { label: 'Cost/Wk',    align: 'right' },
             ].map((col, ci) => (
               <th key={ci} style={{ textAlign: col.align }}>
                 {col.label}
@@ -207,7 +211,12 @@ function AllocationTable({ snapshot, allocations, onUpdateAllocation, locked }) 
                   <td className="num">
                     {a.weekly_utilisation != null ? (a.weekly_utilisation * 37.5).toFixed(1) : '—'}
                   </td>
-                  <td className="num">{fmt(a.cost_calculated)}</td>
+                  {/* Cost/Wk = rate × (utilisation × 37.5) — weekly dollar cost at this utilisation */}
+                  <td className="num">
+                    {a.weekly_utilisation != null && a.hourly_rate != null
+                      ? fmt(a.hourly_rate * a.weekly_utilisation * 37.5)
+                      : '—'}
+                  </td>
                 </tr>
               )),
             ]
