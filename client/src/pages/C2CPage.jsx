@@ -629,7 +629,7 @@ export default function C2CPage() {
   const { data: stageData, isLoading: loadingStage } = useQuery({
     queryKey: ['c2c-stage-view', projectId, phaseFilter],
     queryFn: () => c2cApi.getStageView(projectId, phaseFilter),
-    enabled: !!projectId && stageView,
+    enabled: !!projectId,
   })
 
   const { data: snapDetail, isLoading: loadingDetail } = useQuery({
@@ -670,22 +670,39 @@ export default function C2CPage() {
         </>}
       />
 
-      {/* View mode + Phase toggle — all three buttons sit in a single strip.
-          Clicking Stage View enters the pivot view for the current phase.
-          Clicking Design Documentation or Construction Services exits Stage View
-          and shows the per-week snapshot view for that phase. */}
+      {/* ── Row 1: View mode — larger toggle, independent of phase ── */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+        {[
+          { key: false, label: 'Week View' },
+          { key: true,  label: 'Stage View' },
+        ].map(({ key, label }) => (
+          <button
+            key={String(key)}
+            onClick={() => setStageView(key)}
+            style={{
+              padding: '7px 20px',
+              fontSize: 14,
+              fontWeight: 600,
+              borderRadius: 4,
+              border: '2px solid var(--color-primary)',
+              background: stageView === key ? 'var(--color-primary)' : 'transparent',
+              color: stageView === key ? '#fff' : 'var(--color-primary)',
+              cursor: 'pointer',
+              transition: 'background 0.15s, color 0.15s',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Row 2: Phase selector — standard tab style, independent of view mode ── */}
       <div className="tab-strip mb-4">
-        <button
-          className={`tab${stageView ? ' active' : ''}`}
-          onClick={() => setStageView(true)}
-        >
-          Stage View
-        </button>
         {['design', 'construction'].map(phase => (
           <button
             key={phase}
-            className={`tab${!stageView && phaseFilter === phase ? ' active' : ''}`}
-            onClick={() => { setStageView(false); setPhaseFilter(phase); setSelectedSnapshotId(null) }}
+            className={`tab${phaseFilter === phase ? ' active' : ''}`}
+            onClick={() => { setPhaseFilter(phase); setSelectedSnapshotId(null) }}
           >
             {phase === 'design' ? 'Design Documentation' : 'Construction Services'}
           </button>
