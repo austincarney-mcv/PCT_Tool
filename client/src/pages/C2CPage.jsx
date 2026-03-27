@@ -218,11 +218,95 @@ function AllocationTable({ snapshot, allocations, onUpdateAllocation, locked }) 
   )
 }
 
-// ─── Financials Table ─────────────────────────────────────────────────────────
+// ─── Financials Table — Construction Services (simplified) ───────────────────
+// Shows 3 columns only: Fee less WIP | CTC | Residual
+//
+// TODO: Fee less WIP is a $1,000 placeholder per discipline pending connection
+//       to the external finance/billing database. Revisit when that integration
+//       is scoped.
+// TODO: synergy_net_residual is preserved in the DB but hidden from the CS view.
+//       May be swapped with fee_less_wip or repurposed once the external DB link
+//       is built. Revisit.
+
+const CS_FIN_COL_WIDTHS = [160, 130, 130, 120]
+
+function CSFinancialsTable({ financials, locked, onUpdateFinancial }) {
+  const { widths, startResize } = useColumnResize(CS_FIN_COL_WIDTHS)
+
+  const headers = [
+    { label: 'Discipline',    align: 'left' },
+    { label: 'Fee less WIP',  align: 'right' },
+    { label: 'CTC',           align: 'right' },
+    { label: 'Residual',      align: 'right' },
+  ]
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-primary)', marginBottom: 8 }}>Financial Summary</h3>
+      <div className="data-table-wrap">
+        <table className="data-table" style={{ tableLayout: 'fixed' }}>
+          <colgroup>{widths.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>
+          <thead>
+            <tr>
+              {headers.map((h, ci) => (
+                <th key={ci} style={{ textAlign: h.align }}>
+                  {h.label}
+                  <div className="col-resize-handle" onMouseDown={e => startResize(ci, e)} onClick={e => e.stopPropagation()} />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {DISCIPLINES.map(disc => {
+              const fin = financials.find(f => f.discipline === disc)
+              if (!fin) return null
+              const feeLessWip = fin.fee_less_wip ?? 1000
+              const ctc = fin.construction_doc_cost_to_complete ?? 0
+              const residual = feeLessWip - ctc
+              const residualColor = residual > 0 ? 'var(--color-positive)' : residual < 0 ? 'var(--color-negative)' : undefined
+              return (
+                <tr key={disc}>
+                  <td style={{ fontWeight: 500 }}>{disc}</td>
+                  <td className="num">
+                    {locked ? fmt(feeLessWip) : (
+                      <input
+                        type="number" step="100"
+                        defaultValue={feeLessWip}
+                        style={{ width: '100%', textAlign: 'right', border: '1px solid var(--color-border)', borderRadius: 2, padding: '1px 4px', fontSize: 12, boxSizing: 'border-box' }}
+                        onBlur={e => onUpdateFinancial({ ...fin, fee_less_wip: parseFloat(e.target.value) || 0 })}
+                      />
+                    )}
+                  </td>
+                  <td className="num">{fmt(ctc)}</td>
+                  <td className="num" style={{ color: residualColor, fontWeight: 600 }}>{fmt(residual)}</td>
+                </tr>
+              )
+            })}
+            {financials.length > 0 && (() => {
+              const totFlw = financials.reduce((s, f) => s + (f.fee_less_wip ?? 1000), 0)
+              const totCtc = financials.reduce((s, f) => s + (f.construction_doc_cost_to_complete || 0), 0)
+              const totRes = totFlw - totCtc
+              return (
+                <tr style={{ background: 'var(--color-secondary)', fontWeight: 700 }}>
+                  <td>TOTAL</td>
+                  <td className="num">{fmt(totFlw)}</td>
+                  <td className="num">{fmt(totCtc)}</td>
+                  <td className="num" style={{ color: totRes >= 0 ? 'var(--color-positive)' : 'var(--color-negative)', fontWeight: 700 }}>{fmt(totRes)}</td>
+                </tr>
+              )
+            })()}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ─── Financials Table — Design Documentation (full) ──────────────────────────
 
 const FIN_COL_WIDTHS = [160, 110, 120, 100, 130, 120, 130, 120, 100]
 
-function FinancialsTable({ financials, snapshot, onUpdateFinancial, locked }) {
+function DesignFinancialsTable({ financials, onUpdateFinancial, locked }) {
   const { widths, startResize } = useColumnResize(FIN_COL_WIDTHS)
 
   const headers = [
@@ -442,12 +526,19 @@ export default function C2CPage() {
             locked={locked}
             onUpdateAllocation={item => updateAllocMut.mutate(item)}
           />
-          <FinancialsTable
-            financials={financials}
-            snapshot={activeSnap}
-            locked={locked}
-            onUpdateFinancial={item => updateFinMut.mutate(item)}
-          />
+          {phaseFilter === 'construction' ? (
+            <CSFinancialsTable
+              financials={financials}
+              locked={locked}
+              onUpdateFinancial={item => updateFinMut.mutate(item)}
+            />
+          ) : (
+            <DesignFinancialsTable
+              financials={financials}
+              locked={locked}
+              onUpdateFinancial={item => updateFinMut.mutate(item)}
+            />
+          )}
         </>
       )}
 

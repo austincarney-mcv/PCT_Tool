@@ -60,8 +60,9 @@ function createSnapshot(projectId, { phase, week_number, snapshot_date, week_lab
     const insertFin = db.prepare(`
       INSERT INTO c2c_discipline_financials
         (snapshot_id, discipline, agreed_fee, cost_at_close, net_to_carry,
-         synergy_net_residual, total_net_to_carry, construction_doc_cost_to_complete)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         synergy_net_residual, total_net_to_carry, construction_doc_cost_to_complete,
+         fee_less_wip)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     db.transaction(() => {
@@ -75,7 +76,10 @@ function createSnapshot(projectId, { phase, week_number, snapshot_date, week_lab
       for (const f of prevFinancials) {
         insertFin.run(snapshotId, f.discipline, f.agreed_fee, f.cost_at_close,
           f.net_to_carry, f.synergy_net_residual, f.total_net_to_carry,
-          f.construction_doc_cost_to_complete);
+          f.construction_doc_cost_to_complete,
+          // TODO: fee_less_wip placeholder — carry forward from previous week.
+          //       Replace with live value from external finance DB when integration is built. Revisit.
+          f.fee_less_wip ?? 1000);
       }
     })();
   } else {
@@ -137,21 +141,25 @@ function updateFinancials(snapshotId, items) {
   const stmt = db.prepare(`
     INSERT INTO c2c_discipline_financials
       (snapshot_id, discipline, agreed_fee, cost_at_close, net_to_carry,
-       synergy_net_residual, total_net_to_carry, construction_doc_cost_to_complete)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       synergy_net_residual, total_net_to_carry, construction_doc_cost_to_complete,
+       fee_less_wip)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(snapshot_id, discipline) DO UPDATE SET
       agreed_fee = excluded.agreed_fee,
       cost_at_close = excluded.cost_at_close,
       net_to_carry = excluded.net_to_carry,
       synergy_net_residual = excluded.synergy_net_residual,
       total_net_to_carry = excluded.total_net_to_carry,
-      construction_doc_cost_to_complete = excluded.construction_doc_cost_to_complete
+      construction_doc_cost_to_complete = excluded.construction_doc_cost_to_complete,
+      -- TODO: fee_less_wip placeholder — to be sourced from external finance DB. Revisit.
+      fee_less_wip = excluded.fee_less_wip
   `);
   db.transaction(() => {
     for (const item of items) {
       stmt.run(snapshotId, item.discipline, item.agreed_fee || 0, item.cost_at_close || 0,
         item.net_to_carry || 0, item.synergy_net_residual || 0,
-        item.total_net_to_carry || 0, item.construction_doc_cost_to_complete || 0);
+        item.total_net_to_carry || 0, item.construction_doc_cost_to_complete || 0,
+        item.fee_less_wip ?? 1000);
     }
   })();
 }

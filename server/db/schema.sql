@@ -120,6 +120,9 @@ CREATE TABLE IF NOT EXISTS c2c_discipline_financials (
     agreed_fee                        REAL    NOT NULL DEFAULT 0,
     cost_at_close                     REAL    NOT NULL DEFAULT 0,
     net_to_carry                      REAL    NOT NULL DEFAULT 0,
+    -- Design phase: Synergy system's reported remaining budget.
+    -- TODO: synergy_net_residual is hidden in the CS phase view but preserved here.
+    --       May be swapped with fee_less_wip or merged once the external DB link is built. Revisit.
     synergy_net_residual              REAL    NOT NULL DEFAULT 0,
     total_net_to_carry                REAL    NOT NULL DEFAULT 0,
     adjusted_net_residual             REAL    GENERATED ALWAYS AS
@@ -128,6 +131,10 @@ CREATE TABLE IF NOT EXISTS c2c_discipline_financials (
     under_over                        REAL    GENERATED ALWAYS AS
                                       ((synergy_net_residual - total_net_to_carry)
                                        - construction_doc_cost_to_complete) STORED,
+    -- Construction Services phase: remaining fee not yet earned (Fee minus WIP billed).
+    -- TODO: Placeholder default of $1,000 per discipline. Needs to be connected to the
+    --       external finance/billing database once that integration is scoped. Revisit.
+    fee_less_wip                      REAL    NOT NULL DEFAULT 1000,
     UNIQUE (snapshot_id, discipline)
 );
 CREATE INDEX IF NOT EXISTS idx_c2c_financials_snapshot
