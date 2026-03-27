@@ -542,19 +542,14 @@ export default function C2CPage() {
             locked={locked}
             onUpdateAllocation={item => updateAllocMut.mutate(item)}
           />
-          {phaseFilter === 'construction' ? (
-            <CSFinancialsTable
-              financials={financials}
-              locked={locked}
-              onUpdateFinancial={item => updateFinMut.mutate(item)}
-            />
-          ) : (
-            <DesignFinancialsTable
-              financials={financials}
-              locked={locked}
-              onUpdateFinancial={item => updateFinMut.mutate(item)}
-            />
-          )}
+          {/* Both phases use the simplified 3-column view (Fee less WIP | CTC | Residual).
+              DesignFinancialsTable (8 columns) is preserved below for future reinstatement
+              once the Synergy/net-to-carry workflow is confirmed. */}
+          <CSFinancialsTable
+            financials={financials}
+            locked={locked}
+            onUpdateFinancial={item => updateFinMut.mutate(item)}
+          />
         </>
       )}
 
