@@ -11,7 +11,14 @@ import ExportButton from '../components/excel/ExportButton'
 import { useColumnResize } from '../hooks/useColumnResize'
 
 const DISCIPLINES = ['Architecture','Civil','Structural','Hydraulics','Landscaping','Certifier','Fire Engineering','Fire Services','Builder/CM']
+// fmt — whole-dollar amounts (financial summary, agreed fee, etc.)
 const fmt = v => v != null ? `$${Number(v).toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '—'
+// fmtCents — cent-precision display used for Cost/Wk; truncates to 2dp, no rounding beyond the cent
+const fmtCents = v => {
+  if (v == null) return '—'
+  const truncated = Math.trunc(Number(v) * 100) / 100
+  return `$${truncated.toLocaleString('en-AU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
 
 // ─── Date helpers ────────────────────────────────────────────────────────────
 
@@ -211,10 +218,10 @@ function AllocationTable({ snapshot, allocations, onUpdateAllocation, locked }) 
                   <td className="num">
                     {a.weekly_utilisation != null ? (a.weekly_utilisation * 37.5).toFixed(1) : '—'}
                   </td>
-                  {/* Cost/Wk = rate × (utilisation × 37.5) — weekly dollar cost at this utilisation */}
+                  {/* Cost/Wk = rate × (utilisation × 37.5) — weekly dollar cost at this utilisation, shown to cent precision */}
                   <td className="num">
                     {a.weekly_utilisation != null && a.hourly_rate != null
-                      ? fmt(a.hourly_rate * a.weekly_utilisation * 37.5)
+                      ? fmtCents(a.hourly_rate * a.weekly_utilisation * 37.5)
                       : '—'}
                   </td>
                 </tr>
