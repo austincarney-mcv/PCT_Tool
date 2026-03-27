@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react'
+import { useColumnResize } from '../../hooks/useColumnResize'
 import '../../styles/table.css'
 
 /**
- * Reusable dense data table.
+ * Reusable dense data table with drag-to-resize columns.
  *
  * columns: [{ key, header, width, align, sortable, render(row), className }]
  * rows: array of data objects
@@ -23,6 +24,10 @@ export default function DataTable({
 }) {
   const [sortKey, setSortKey] = useState(null)
   const [sortDir, setSortDir] = useState('asc')
+
+  // Initialise resize widths from column definitions
+  const initialWidths = columns.map(c => typeof c.width === 'number' ? c.width : parseInt(c.width) || 120)
+  const { widths, startResize } = useColumnResize(initialWidths)
 
   function handleSort(col) {
     if (!col.sortable) return
@@ -61,11 +66,10 @@ export default function DataTable({
         className={selectedId != null && rowKey(row) === selectedId ? 'selected' : ''}
         style={onRowClick ? { cursor: 'pointer' } : {}}
       >
-        {columns.map(col => (
+        {columns.map((col, ci) => (
           <td
             key={col.key}
             className={[col.className, col.align === 'right' ? 'num' : ''].filter(Boolean).join(' ')}
-            style={{ width: col.width }}
           >
             {col.render ? col.render(row) : (row[col.key] != null ? String(row[col.key]) : '')}
           </td>
@@ -76,21 +80,31 @@ export default function DataTable({
 
   return (
     <div className="data-table-wrap">
-      <table className="data-table">
+      <table className="data-table" style={{ tableLayout: 'fixed' }}>
+        <colgroup>
+          {columns.map((col, ci) => (
+            <col key={col.key} style={{ width: widths[ci] }} />
+          ))}
+        </colgroup>
         <thead>
           <tr>
-            {columns.map(col => (
+            {columns.map((col, ci) => (
               <th
                 key={col.key}
                 className={[
                   col.sortable ? 'sortable' : '',
                   sortKey === col.key ? 'sorted' : '',
                 ].filter(Boolean).join(' ')}
-                style={{ width: col.width, textAlign: col.align || 'left' }}
+                style={{ textAlign: col.align || 'left' }}
                 onClick={() => handleSort(col)}
               >
                 {col.header}
                 {col.sortable && <span className="sort-icon">{sortKey === col.key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ' ⇅'}</span>}
+                <div
+                  className="col-resize-handle"
+                  onMouseDown={e => startResize(ci, e)}
+                  onClick={e => e.stopPropagation()}
+                />
               </th>
             ))}
           </tr>

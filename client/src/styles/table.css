@@ -22,13 +22,31 @@
   font-size: var(--font-size-xs);
   font-weight: 600;
   text-align: left;
-  padding: 6px 8px;
+  padding: 6px 24px 6px 8px; /* right padding reserves space for resize handle */
   border-right: 1px solid rgba(255,255,255,0.15);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   user-select: none;
   position: sticky;
   top: 0;
   z-index: 1;
+}
+
+/* Column resize handle — sits at the right edge of each <th> */
+.col-resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 2;
+  user-select: none;
+}
+.col-resize-handle:hover,
+.col-resize-handle:active {
+  background: rgba(255, 255, 255, 0.35);
 }
 .data-table thead th:last-child { border-right: none; }
 .data-table thead th.sortable { cursor: pointer; }

@@ -20,6 +20,7 @@ function NewProjectModal({ onClose }) {
     e.preventDefault()
     setError(null)
     if (!form.project_number || !form.project_name) { setError('Project number and name are required'); return }
+    if (!/^\d{8}$/.test(form.project_number)) { setError('Project number must be exactly 8 digits (e.g. 00010162)'); return }
     mut.mutate(form, { onError: err => setError(err.response?.data?.error || err.message) })
   }
 
@@ -27,8 +28,18 @@ function NewProjectModal({ onClose }) {
     <Modal title="New Project" onClose={onClose} size="md">
       <form onSubmit={handleSubmit}>
         <div className="form-row cols-2">
-          <FormField label="Project Number" required>
-            <input className="form-input" value={form.project_number} onChange={e => setForm(p => ({ ...p, project_number: e.target.value }))} />
+          <FormField label="Project Number" required hint="Exactly 8 digits (e.g. 00010162)">
+            <input
+              className="form-input"
+              maxLength={8}
+              placeholder="00000000"
+              value={form.project_number}
+              onChange={e => {
+                // Strip non-digits and cap at 8 characters
+                const val = e.target.value.replace(/\D/g, '').slice(0, 8)
+                setForm(p => ({ ...p, project_number: val }))
+              }}
+            />
           </FormField>
           <FormField label="Release Status">
             <select className="form-select" value={form.release_status} onChange={e => setForm(p => ({ ...p, release_status: e.target.value }))}>

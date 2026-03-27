@@ -20,6 +20,9 @@ function create(req, res) {
   if (!project_number || !project_name) {
     return res.status(400).json({ error: 'project_number and project_name are required' });
   }
+  if (!/^\d{8}$/.test(String(project_number))) {
+    return res.status(400).json({ error: 'Project number must be exactly 8 digits (e.g. 00010162)' });
+  }
   const stmt = db.prepare(`
     INSERT INTO projects (project_number, project_name, client, author, version, release_status, date_created)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -41,6 +44,9 @@ function update(req, res) {
   const { project_number, project_name, client, author, version, release_status } = req.body;
   const existing = db.prepare('SELECT id FROM projects WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Project not found' });
+  if (project_number && !/^\d{8}$/.test(String(project_number))) {
+    return res.status(400).json({ error: 'Project number must be exactly 8 digits (e.g. 00010162)' });
+  }
 
   db.prepare(`
     UPDATE projects
