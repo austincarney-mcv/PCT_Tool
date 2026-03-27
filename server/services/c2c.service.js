@@ -171,12 +171,36 @@ function lockSnapshot(snapshotId) {
   db.prepare('UPDATE c2c_snapshots SET snapshot_locked = 1 WHERE id = ?').run(snapshotId);
 }
 
+function unlockSnapshot(snapshotId) {
+  const db = getDb();
+  const snap = db.prepare('SELECT id FROM c2c_snapshots WHERE id = ?').get(snapshotId);
+  if (!snap) throw Object.assign(new Error('Snapshot not found'), { status: 404 });
+  db.prepare('UPDATE c2c_snapshots SET snapshot_locked = 0 WHERE id = ?').run(snapshotId);
+}
+
+function deleteSnapshot(projectId, snapshotId) {
+  const db = getDb();
+  const snap = db.prepare('SELECT * FROM c2c_snapshots WHERE id = ? AND project_id = ?').get(snapshotId, projectId);
+  if (!snap) throw Object.assign(new Error('Snapshot not found'), { status: 404 });
+
+  // Only allow deleting the last week in its phase
+  const last = db.prepare(
+    'SELECT id FROM c2c_snapshots WHERE project_id = ? AND phase = ? ORDER BY week_number DESC LIMIT 1'
+  ).get(projectId, snap.phase);
+  if (!last || last.id !== snap.id) {
+    throw Object.assign(new Error('Only the last week in a phase can be deleted'), { status: 400 });
+  }
+
+  db.prepare('DELETE FROM c2c_snapshots WHERE id = ?').run(snapshotId);
+  return { week_label: snap.week_label };
+}
+
 function getStageView(projectId, phase) {
   const db = getDb();
 
   // 1. All snapshots for this project+phase ordered by week_number
   const snapshots = db.prepare(`
-    SELECT id, week_number, week_label
+    SELECT id, week_number, week_label, snapshot_locked
     FROM c2c_snapshots
     WHERE project_id = ? AND phase = ?
     ORDER BY week_number
@@ -189,7 +213,7 @@ function getStageView(projectId, phase) {
 
   // 2. All allocations across those snapshots joined with team_resources
   const allAllocations = db.prepare(`
-    SELECT cra.snapshot_id, cra.weekly_utilisation,
+    SELECT cra.id AS allocation_id, cra.snapshot_id, cra.weekly_utilisation, cra.remaining_weeks,
            tr.id   AS resource_id,
            tr.name AS resource_name,
            tr.discipline,
@@ -206,21 +230,27 @@ function getStageView(projectId, phase) {
   for (const alloc of allAllocations) {
     if (!resourceMap.has(alloc.resource_id)) {
       resourceMap.set(alloc.resource_id, {
-        resource_id:             alloc.resource_id,
-        resource_name:           alloc.resource_name,
-        discipline:              alloc.discipline,
-        hourly_rate:             alloc.hourly_rate,
-        sort_order:              alloc.sort_order,
-        utilisation_by_snapshot: {},
+        resource_id:          alloc.resource_id,
+        resource_name:        alloc.resource_name,
+        discipline:           alloc.discipline,
+        hourly_rate:          alloc.hourly_rate,
+        sort_order:           alloc.sort_order,
+        allocation_by_snapshot: {},
       });
     }
-    resourceMap.get(alloc.resource_id).utilisation_by_snapshot[alloc.snapshot_id] = alloc.weekly_utilisation;
+    resourceMap.get(alloc.resource_id).allocation_by_snapshot[alloc.snapshot_id] = {
+      allocation_id:      alloc.allocation_id,
+      weekly_utilisation: alloc.weekly_utilisation,
+      remaining_weeks:    alloc.remaining_weeks,
+    };
   }
 
   // Fill any snapshot gaps with 0 so every resource has an entry for every week
   for (const res of resourceMap.values()) {
     for (const sid of snapshotIds) {
-      if (!(sid in res.utilisation_by_snapshot)) res.utilisation_by_snapshot[sid] = 0;
+      if (!(sid in res.allocation_by_snapshot)) {
+        res.allocation_by_snapshot[sid] = { allocation_id: null, weekly_utilisation: 0, remaining_weeks: 0 };
+      }
     }
   }
 
@@ -254,6 +284,6 @@ function getTrend(projectId) {
 
 module.exports = {
   getSnapshot, getAllocations, getFinancials, createSnapshot,
-  updateAllocations, updateFinancials, lockSnapshot, getTrend, recalcDisciplineCosts,
-  getStageView,
+  updateAllocations, updateFinancials, lockSnapshot, unlockSnapshot, deleteSnapshot,
+  getTrend, recalcDisciplineCosts, getStageView,
 };

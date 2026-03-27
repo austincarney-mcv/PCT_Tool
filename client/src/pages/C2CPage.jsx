@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { c2cApi } from '../api/c2c.api'
 import { useProject } from '../context/ProjectContext'
@@ -40,6 +40,13 @@ function toMonday(dateStr) {
   return d.toISOString().slice(0, 10)
 }
 
+/** Adds n weeks (n*7 days) to a YYYY-MM-DD string and returns YYYY-MM-DD. */
+function addWeeks(dateStr, n) {
+  const d = new Date(dateStr + 'T12:00:00')
+  d.setDate(d.getDate() + n * 7)
+  return d.toISOString().slice(0, 10)
+}
+
 /** Formats a week label, e.g. "Week 3 - 23 March" */
 function makeWeekLabel(weekNum, dateStr) {
   if (!dateStr || !weekNum) return ''
@@ -61,35 +68,49 @@ const IMMUTABLE_STYLE = {
 function AddWeekModal({ projectId, initialPhase, allSnapshots, onClose }) {
   const qc = useQueryClient()
   const [phase, setPhase] = useState(initialPhase)
-  const [snapshotDate, setSnapshotDate] = useState(getCurrentMonday)
+  const [startDate, setStartDate] = useState(getCurrentMonday)
+  const [numWeeks, setNumWeeks] = useState(1)
+  const [isPending, setIsPending] = useState(false)
   const [error, setError] = useState(null)
 
-  // Recompute week number and duplicate check whenever phase or date changes
   const phaseSnaps = allSnapshots.filter(s => s.phase === phase)
   const nextWeekNumber = phaseSnaps.length > 0
     ? Math.max(...phaseSnaps.map(s => s.week_number)) + 1
     : 1
-  const weekLabel = makeWeekLabel(nextWeekNumber, snapshotDate)
-  const isDuplicate = phaseSnaps.some(s => s.snapshot_date === snapshotDate)
 
-  const mut = useMutation({
-    mutationFn: d => c2cApi.createSnapshot(projectId, d),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['c2c-snapshots', projectId] }); onClose() },
-  })
+  // Build the list of dates this submission would create
+  const weekDates = Array.from({ length: numWeeks }, (_, i) => addWeeks(startDate, i))
+  const conflictDate = weekDates.find(d => phaseSnaps.some(s => s.snapshot_date === d))
+
+  // Preview label(s)
+  const previewStart = makeWeekLabel(nextWeekNumber, startDate)
+  const previewEnd   = numWeeks > 1 ? makeWeekLabel(nextWeekNumber + numWeeks - 1, weekDates[numWeeks - 1]) : null
 
   function handleDateChange(e) {
     if (!e.target.value) return
-    setSnapshotDate(toMonday(e.target.value))
+    setStartDate(toMonday(e.target.value))
     setError(null)
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
-    if (isDuplicate) { setError('Date range already exists in the C2C'); return }
-    mut.mutate(
-      { phase, week_number: nextWeekNumber, snapshot_date: snapshotDate, week_label: weekLabel },
-      { onError: err => setError(err.response?.data?.error || err.message) }
-    )
+    if (conflictDate) { setError(`A week starting ${conflictDate} already exists`); return }
+    setIsPending(true)
+    try {
+      for (let i = 0; i < numWeeks; i++) {
+        const weekNum  = nextWeekNumber + i
+        const weekDate = weekDates[i]
+        await c2cApi.createSnapshot(projectId, {
+          phase, week_number: weekNum, snapshot_date: weekDate, week_label: makeWeekLabel(weekNum, weekDate),
+        })
+      }
+      qc.invalidateQueries({ queryKey: ['c2c-snapshots', projectId] })
+      onClose()
+    } catch (err) {
+      setError(err.response?.data?.error || err.message)
+    } finally {
+      setIsPending(false)
+    }
   }
 
   return (
@@ -106,38 +127,91 @@ function AddWeekModal({ projectId, initialPhase, allSnapshots, onClose }) {
               <option value="construction">Construction Services</option>
             </select>
           </FormField>
-          <FormField label="Week Number">
-            <input className="form-input" type="number" value={nextWeekNumber} readOnly style={IMMUTABLE_STYLE} />
+          <FormField label="Number of Weeks">
+            <input
+              className="form-input"
+              type="number" min="1" max="52"
+              value={numWeeks}
+              onChange={e => { setNumWeeks(Math.max(1, parseInt(e.target.value) || 1)); setError(null) }}
+            />
           </FormField>
         </div>
-        <FormField label="Week Label">
-          <input className="form-input" value={weekLabel || '—'} readOnly style={IMMUTABLE_STYLE} />
-        </FormField>
-        <FormField label="Week Starting (Monday)" hint="Select any date — it will snap to the Monday of that week">
+        <FormField label={numWeeks > 1 ? 'Range Start (Monday)' : 'Week Starting (Monday)'} hint="Select any date — it will snap to the Monday of that week">
           <input
-            className={`form-input${isDuplicate ? ' input-error' : ''}`}
+            className={`form-input${conflictDate ? ' input-error' : ''}`}
             type="date"
-            value={snapshotDate}
+            value={startDate}
             onChange={handleDateChange}
           />
-          {isDuplicate && (
+          {conflictDate && (
             <div style={{ color: 'var(--color-negative)', fontSize: 12, marginTop: 4 }}>
-              Date range already exists in the C2C
+              A week starting {conflictDate} already exists in the C2C
             </div>
           )}
         </FormField>
-        {error && !isDuplicate && <div className="error-banner mb-4">{error}</div>}
+        <FormField label={numWeeks > 1 ? 'Weeks to be created' : 'Week Label'}>
+          <input
+            className="form-input"
+            value={numWeeks > 1 ? `${previewStart}  →  ${previewEnd}` : (previewStart || '—')}
+            readOnly
+            style={IMMUTABLE_STYLE}
+          />
+        </FormField>
+        {error && !conflictDate && <div className="error-banner mb-4">{error}</div>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>Cancel</button>
           <button
             type="submit"
             className="btn btn-primary btn-sm"
-            disabled={mut.isPending || isDuplicate}
+            disabled={isPending || !!conflictDate}
           >
-            {mut.isPending ? 'Adding…' : 'Add Week'}
+            {isPending ? 'Adding…' : numWeeks > 1 ? `Add ${numWeeks} Weeks` : 'Add Week'}
           </button>
         </div>
       </form>
+    </Modal>
+  )
+}
+
+// ─── Delete Week Modal ────────────────────────────────────────────────────────
+
+function DeleteWeekModal({ projectId, lastSnap, selectedSnapshotId, onDeleted, onClose }) {
+  const qc = useQueryClient()
+  const [confirmed, setConfirmed] = useState(false)
+  const [error, setError] = useState(null)
+
+  const mut = useMutation({
+    mutationFn: () => c2cApi.deleteSnapshot(projectId, lastSnap.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['c2c-snapshots', projectId] })
+      qc.invalidateQueries({ queryKey: ['c2c-stage-view', projectId, lastSnap.phase] })
+      if (selectedSnapshotId === lastSnap.id) onDeleted()
+      onClose()
+    },
+    onError: err => setError(err.response?.data?.error || err.message),
+  })
+
+  return (
+    <Modal title="Delete Last Week" onClose={onClose} size="sm">
+      <p style={{ marginBottom: 12 }}>
+        This will permanently delete <strong>{lastSnap.week_label}</strong> and all its resource allocations and financial data.
+      </p>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, cursor: 'pointer', fontSize: 13 }}>
+        <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />
+        I confirm I want to delete <strong style={{ marginLeft: 4 }}>{lastSnap.week_label}</strong>
+      </label>
+      {error && <div className="error-banner mb-4">{error}</div>}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>Cancel</button>
+        <button
+          className="btn btn-sm"
+          style={{ background: 'var(--color-negative)', color: '#fff', border: 'none' }}
+          disabled={!confirmed || mut.isPending}
+          onClick={() => mut.mutate()}
+        >
+          {mut.isPending ? 'Deleting…' : 'Delete Week'}
+        </button>
+      </div>
     </Modal>
   )
 }
@@ -344,7 +418,7 @@ function StageFinancialsTable({ snapshots, resources, financials }) {
   const discCtcMap = {}
   for (const res of resources) {
     const totalHours = snapshots.reduce((sum, snap) =>
-      sum + (res.utilisation_by_snapshot[snap.id] ?? 0) * 37.5, 0)
+      sum + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0)
     discCtcMap[res.discipline] = (discCtcMap[res.discipline] || 0) + totalHours * res.hourly_rate
   }
   const discFinMap = Object.fromEntries(financials.map(f => [f.discipline, f]))
@@ -402,7 +476,7 @@ function StageFinancialsTable({ snapshots, resources, financials }) {
   )
 }
 
-function StageView({ data }) {
+function StageView({ data, onToggleLock, onUpdateAllocation }) {
   const { snapshots, resources, financials } = data
   const nFixed = 2  // Resource + Rate
   const nTrail = 2  // Total Hrs + Phase CTC
@@ -433,11 +507,16 @@ function StageView({ data }) {
                   <div className="col-resize-handle" onMouseDown={e => startResize(ci, e)} onClick={e => e.stopPropagation()} />
                 </th>
               ))}
-              {/* Dynamic: one column per week snapshot */}
+              {/* Dynamic: one column per week snapshot — click header to toggle lock */}
               {snapshots.map((snap, si) => (
-                <th key={snap.id} style={{ textAlign: 'right' }}>
-                  W{snap.week_number}
-                  <div className="col-resize-handle" onMouseDown={e => startResize(nFixed + si, e)} onClick={e => e.stopPropagation()} />
+                <th
+                  key={snap.id}
+                  style={{ textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => onToggleLock(snap.id)}
+                  title={snap.snapshot_locked ? 'Click to unlock week' : 'Click to lock week'}
+                >
+                  W{snap.week_number} {snap.snapshot_locked ? '🔒' : '🔓'}
+                  <div className="col-resize-handle" onMouseDown={e => { e.stopPropagation(); startResize(nFixed + si, e) }} onClick={e => e.stopPropagation()} />
                 </th>
               ))}
               {/* Trailing: Total Hrs, Phase CTC */}
@@ -454,11 +533,11 @@ function StageView({ data }) {
               const group = grouped[disc]
               if (!group || group.length === 0) return null
 
-              // Discipline subtotals
+              // Discipline subtotals (use weekly_utilisation from allocation_by_snapshot)
               const discTotalHrs = group.reduce((sum, res) =>
-                sum + snapshots.reduce((s2, snap) => s2 + (res.utilisation_by_snapshot[snap.id] ?? 0) * 37.5, 0), 0)
+                sum + snapshots.reduce((s2, snap) => s2 + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0), 0)
               const discPhaseCTC = group.reduce((sum, res) => {
-                const hrs = snapshots.reduce((s2, snap) => s2 + (res.utilisation_by_snapshot[snap.id] ?? 0) * 37.5, 0)
+                const hrs = snapshots.reduce((s2, snap) => s2 + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0)
                 return sum + hrs * res.hourly_rate
               }, 0)
 
@@ -468,17 +547,36 @@ function StageView({ data }) {
                 </tr>,
                 ...group.map(res => {
                   const totalHours = snapshots.reduce((sum, snap) =>
-                    sum + (res.utilisation_by_snapshot[snap.id] ?? 0) * 37.5, 0)
+                    sum + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0)
                   const phaseCTC = totalHours * res.hourly_rate
                   return (
                     <tr key={res.resource_id}>
                       <td>{res.resource_name}</td>
                       <td className="num">{fmt(res.hourly_rate)}</td>
                       {snapshots.map(snap => {
-                        const util = res.utilisation_by_snapshot[snap.id]
+                        const alloc = res.allocation_by_snapshot[snap.id]
+                        const util  = alloc?.weekly_utilisation ?? 0
+                        const locked = snap.snapshot_locked
                         return (
                           <td key={snap.id} className="num">
-                            {util != null && util > 0 ? `${(util * 100).toFixed(0)}%` : '0%'}
+                            {locked ? (
+                              util > 0 ? `${(util * 100).toFixed(0)}%` : '0%'
+                            ) : (
+                              <input
+                                type="number" step="0.05" min="0" max="1"
+                                defaultValue={util}
+                                style={{ width: 56, textAlign: 'right', border: '1px solid var(--color-border)', borderRadius: 2, padding: '1px 4px', fontSize: 12 }}
+                                onBlur={e => {
+                                  if (!alloc?.allocation_id) return
+                                  onUpdateAllocation({
+                                    snapshotId: snap.id,
+                                    allocationId: alloc.allocation_id,
+                                    weekly_utilisation: parseFloat(e.target.value) || 0,
+                                    remaining_weeks: alloc.remaining_weeks ?? 0,
+                                  })
+                                }}
+                              />
+                            )}
                           </td>
                         )
                       })}
@@ -604,19 +702,23 @@ export default function C2CPage() {
   const [selectedSnapshotId, setSelectedSnapshotId] = useState(null)
   const [phaseFilter, setPhaseFilter] = useState('design')
   const [showNew, setShowNew] = useState(false)
-  const [stageView, setStageView] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
+  const [stageView, setStageView] = useState(true)
 
-  const { data: snapshots = [], isLoading: loadingSnaps } = useQuery({
+  const { data: snapshots = [] } = useQuery({
     queryKey: ['c2c-snapshots', projectId],
     queryFn: () => c2cApi.listSnapshots(projectId),
     enabled: !!projectId,
-    onSuccess: data => {
-      if (!selectedSnapshotId && data.length > 0) {
-        const first = data.filter(s => s.phase === phaseFilter)[0] || data[0]
-        setSelectedSnapshotId(first?.id)
-      }
-    }
   })
+
+  // Auto-select week 1 of the current phase whenever the selection is empty
+  useEffect(() => {
+    if (!selectedSnapshotId && snapshots.length > 0) {
+      const target = snapshots.find(s => s.phase === phaseFilter && s.week_number === 1)
+        ?? snapshots.find(s => s.phase === phaseFilter)
+      setSelectedSnapshotId(target?.id ?? null)
+    }
+  }, [snapshots, selectedSnapshotId, phaseFilter])
 
   const filteredSnaps = snapshots.filter(s => s.phase === phaseFilter)
   const activeSnap = snapshots.find(s => s.id === selectedSnapshotId)
@@ -638,14 +740,29 @@ export default function C2CPage() {
     enabled: !!projectId && !!selectedSnapshotId,
   })
 
-  const lockMut = useMutation({
-    mutationFn: () => c2cApi.lockSnapshot(projectId, selectedSnapshotId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['c2c-snapshots', projectId] }),
+  const toggleLockMut = useMutation({
+    mutationFn: sid => {
+      const snap = snapshots.find(s => s.id === sid)
+      return snap?.snapshot_locked
+        ? c2cApi.unlockSnapshot(projectId, sid)
+        : c2cApi.lockSnapshot(projectId, sid)
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['c2c-snapshots', projectId] })
+      qc.invalidateQueries({ queryKey: ['c2c-snapshot', selectedSnapshotId] })
+      qc.invalidateQueries({ queryKey: ['c2c-stage-view', projectId, phaseFilter] })
+    },
   })
 
   const updateAllocMut = useMutation({
     mutationFn: item => c2cApi.updateAllocations(projectId, selectedSnapshotId, [item]),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['c2c-snapshot', selectedSnapshotId] }),
+  })
+
+  const stageUpdateAllocMut = useMutation({
+    mutationFn: ({ snapshotId, allocationId, weekly_utilisation, remaining_weeks }) =>
+      c2cApi.updateAllocations(projectId, snapshotId, [{ id: allocationId, weekly_utilisation, remaining_weeks }]),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['c2c-stage-view', projectId, phaseFilter] }),
   })
 
   const updateFinMut = useMutation({
@@ -658,6 +775,7 @@ export default function C2CPage() {
   const locked = activeSnap?.snapshot_locked === 1
   const allocations = snapDetail?.allocations || []
   const financials = snapDetail?.financials || []
+  const lastPhaseSnap = filteredSnaps.length > 0 ? filteredSnaps[filteredSnaps.length - 1] : null
 
   return (
     <div>
@@ -666,6 +784,9 @@ export default function C2CPage() {
         subtitle="Weekly fee burn and remaining cost to complete"
         actions={<>
           <ExportButton />
+          {lastPhaseSnap && (
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowDelete(true)}>Delete Last Week</button>
+          )}
           <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}>+ Add Week</button>
         </>}
       />
@@ -673,8 +794,8 @@ export default function C2CPage() {
       {/* ── Row 1: View mode — larger toggle, independent of phase ── */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
         {[
-          { key: false, label: 'Week View' },
           { key: true,  label: 'Stage View' },
+          { key: false, label: 'Week View' },
         ].map(({ key, label }) => (
           <button
             key={String(key)}
@@ -716,7 +837,12 @@ export default function C2CPage() {
           : stageError
             ? <div className="error-banner">{stageErrorObj?.response?.data?.error || stageErrorObj?.message || 'Failed to load Stage View'}</div>
             : stageData && stageData.snapshots?.length > 0
-              ? <StageView key={`${phaseFilter}-${stageData.snapshots.length}`} data={stageData} />
+              ? <StageView
+                  key={`${phaseFilter}-${stageData.snapshots.length}`}
+                  data={stageData}
+                  onToggleLock={sid => toggleLockMut.mutate(sid)}
+                  onUpdateAllocation={item => stageUpdateAllocMut.mutate(item)}
+                />
               : <div className="empty-state card" style={{ padding: 32 }}>No {phaseFilter} weeks found. Add a week first.</div>
       )}
 
@@ -727,23 +853,33 @@ export default function C2CPage() {
           {filteredSnaps.length > 0 && (
             <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 600 }}>WEEK:</span>
-              {filteredSnaps.map(s => (
-                <button
-                  key={s.id}
-                  onClick={() => setSelectedSnapshotId(s.id)}
-                  style={{
-                    padding: '3px 12px',
-                    borderRadius: 3,
-                    border: '1px solid var(--color-border-dk)',
-                    background: s.id === selectedSnapshotId ? 'var(--color-primary)' : '#fff',
-                    color: s.id === selectedSnapshotId ? '#fff' : 'var(--color-text)',
-                    fontSize: 12, cursor: 'pointer',
-                    fontWeight: s.id === selectedSnapshotId ? 600 : 400,
-                  }}
-                >
-                  W{s.week_number} {s.snapshot_locked ? '🔒' : ''}
-                </button>
-              ))}
+              {filteredSnaps.map(s => {
+                const isSelected = s.id === selectedSnapshotId
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => {
+                      if (isSelected) {
+                        toggleLockMut.mutate(s.id)
+                      } else {
+                        setSelectedSnapshotId(s.id)
+                      }
+                    }}
+                    title={isSelected ? (s.snapshot_locked ? 'Click to unlock week' : 'Click to lock week') : `Switch to W${s.week_number}`}
+                    style={{
+                      padding: '3px 12px',
+                      borderRadius: 3,
+                      border: '1px solid var(--color-border-dk)',
+                      background: isSelected ? 'var(--color-primary)' : '#fff',
+                      color: isSelected ? '#fff' : 'var(--color-text)',
+                      fontSize: 12, cursor: 'pointer',
+                      fontWeight: isSelected ? 600 : 400,
+                    }}
+                  >
+                    W{s.week_number} {s.snapshot_locked ? '🔒' : '🔓'}
+                  </button>
+                )
+              })}
             </div>
           )}
 
@@ -754,15 +890,12 @@ export default function C2CPage() {
           )}
 
           {activeSnap && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <div>
-                <span style={{ fontWeight: 600, fontSize: 14 }}>{activeSnap.week_label}</span>
-                <span style={{ marginLeft: 12, fontSize: 12, color: 'var(--color-text-muted)' }}>{activeSnap.snapshot_date}</span>
-                {locked && <span style={{ marginLeft: 8, background: 'var(--color-tertiary)', color: 'var(--color-primary)', padding: '2px 8px', borderRadius: 3, fontSize: 11, fontWeight: 600 }}>LOCKED</span>}
-              </div>
-              {!locked && (
-                <button className="btn btn-secondary btn-sm" onClick={() => lockMut.mutate()}>🔒 Lock Week</button>
-              )}
+            <div style={{ marginBottom: 12 }}>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>{activeSnap.week_label}</span>
+              <span style={{ marginLeft: 12, fontSize: 12, color: 'var(--color-text-muted)' }}>{activeSnap.snapshot_date}</span>
+              <span style={{ marginLeft: 8, background: 'var(--color-tertiary)', color: 'var(--color-primary)', padding: '2px 8px', borderRadius: 3, fontSize: 11, fontWeight: 600 }}>
+                {locked ? '🔒 LOCKED' : '🔓 UNLOCKED'}
+              </span>
             </div>
           )}
 
@@ -795,6 +928,16 @@ export default function C2CPage() {
           initialPhase={phaseFilter}
           allSnapshots={snapshots}
           onClose={() => setShowNew(false)}
+        />
+      )}
+
+      {showDelete && lastPhaseSnap && (
+        <DeleteWeekModal
+          projectId={projectId}
+          lastSnap={lastPhaseSnap}
+          selectedSnapshotId={selectedSnapshotId}
+          onDeleted={() => setSelectedSnapshotId(null)}
+          onClose={() => setShowDelete(false)}
         />
       )}
     </div>

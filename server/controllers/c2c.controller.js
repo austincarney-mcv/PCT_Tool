@@ -44,6 +44,24 @@ function lockSnapshot(req, res) {
   }
 }
 
+function unlockSnapshot(req, res) {
+  try {
+    svc.unlockSnapshot(req.params.sid);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+}
+
+function deleteSnapshot(req, res) {
+  try {
+    const result = svc.deleteSnapshot(req.params.id, req.params.sid);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+}
+
 function getAllocations(req, res) {
   // Verify snapshot belongs to project
   const db = getDb();
@@ -100,7 +118,7 @@ function stageView(req, res) {
 }
 
 module.exports = {
-  listSnapshots, getSnapshot, createSnapshot, lockSnapshot,
+  listSnapshots, getSnapshot, createSnapshot, lockSnapshot, unlockSnapshot, deleteSnapshot,
   getAllocations, updateAllocations, getFinancials, updateFinancials,
   trend, stageView,
 };
