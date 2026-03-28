@@ -13,7 +13,4 @@ export const c2cApi = {
   updateAllocations:(pid, sid, items) => api.put(`/projects/${pid}/c2c/snapshots/${sid}/allocations`, { items }).then(r => r.data),
   getFinancials:   (pid, sid) => api.get(`/projects/${pid}/c2c/snapshots/${sid}/financials`).then(r => r.data),
   updateFinancials:(pid, sid, items) => api.put(`/projects/${pid}/c2c/snapshots/${sid}/financials`, { items }).then(r => r.data),
-  recordWeek:     (pid, phase, fee_less_wip) => api.post(`/projects/${pid}/c2c/record-week`, { phase, fee_less_wip }).then(r => r.data),
-  submitSnapshot: (pid, sid) => api.put(`/projects/${pid}/c2c/snapshots/${sid}/submit`).then(r => r.data),
-  adminUnlock:    (pid, sid, reason) => api.put(`/projects/${pid}/c2c/snapshots/${sid}/admin-unlock`, { reason }).then(r => r.data),
 }

@@ -10,9 +10,6 @@ router.get('/snapshots/:sid', auth, c.getSnapshot);
 router.put('/snapshots/:sid/lock', auth, c.lockSnapshot);
 router.put('/snapshots/:sid/unlock', auth, c.unlockSnapshot);
 router.delete('/snapshots/:sid', auth, c.deleteSnapshot);
-router.post('/record-week', auth, c.recordWeek);
-router.put('/snapshots/:sid/submit', auth, c.submitSnapshot);
-router.put('/snapshots/:sid/admin-unlock', auth, c.adminUnlockSnapshot);
 router.get('/trend', auth, c.trend);
 router.get('/stage-view', auth, c.stageView);
 

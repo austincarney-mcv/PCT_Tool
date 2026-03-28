@@ -28,22 +28,7 @@ function migrate() {
   });
 
   runMigrations();
-  alterV2(db);
   console.log('[migrate] Schema applied successfully.');
 }
 
-function alterV2(db) {
-  const cols = [
-    `ALTER TABLE c2c_snapshots ADD COLUMN submission_status TEXT NOT NULL DEFAULT 'draft' CHECK (submission_status IN ('draft','submitted'))`,
-    `ALTER TABLE c2c_snapshots ADD COLUMN submitted_at TEXT`,
-    `ALTER TABLE c2c_snapshots ADD COLUMN submitted_by TEXT`,
-    `ALTER TABLE c2c_snapshots ADD COLUMN unlock_reason TEXT`,
-  ]
-  for (const sql of cols) {
-    try { db.prepare(sql).run() } catch (e) {
-      if (!e.message.includes('duplicate column name')) throw e
-    }
-  }
-}
-
-module.exports = { migrate, alterV2 };
+module.exports = { migrate };

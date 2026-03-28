@@ -78,11 +78,6 @@ CREATE TABLE IF NOT EXISTS c2c_snapshots (
     week_label       TEXT    NOT NULL,
     snapshot_locked  INTEGER NOT NULL DEFAULT 1 CHECK (snapshot_locked IN (0,1)),
     created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
-    submission_status TEXT    NOT NULL DEFAULT 'draft'
-                      CHECK (submission_status IN ('draft','submitted')),
-    submitted_at      TEXT,
-    submitted_by      TEXT,
-    unlock_reason     TEXT,
     UNIQUE (project_id, phase, week_number)
 );
 CREATE INDEX IF NOT EXISTS idx_c2c_snapshots_project

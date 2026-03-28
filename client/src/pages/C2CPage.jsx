@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { c2cApi } from '../api/c2c.api'
 import { useProject } from '../context/ProjectContext'
-import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/layout/PageHeader'
 import Modal from '../components/common/Modal'
 import FormField from '../components/common/FormField'
@@ -212,157 +211,6 @@ function DeleteWeekModal({ projectId, lastSnap, selectedSnapshotId, onDeleted, o
           onClick={() => mut.mutate()}
         >
           {mut.isPending ? 'Deleting…' : 'Delete Week'}
-        </button>
-      </div>
-    </Modal>
-  )
-}
-
-// ─── Record Week Modal ────────────────────────────────────────────────────────
-// Saves fee_less_wip, locks the current week, creates the next week unlocked.
-
-function RecordWeekModal({ projectId, phase, latestSnap, currentFinancials, onClose }) {
-  const qc = useQueryClient()
-  // Build initial fee_less_wip state from existing financials
-  const [feeLessWip, setFeeLessWip] = useState(() => {
-    const map = {}
-    for (const f of currentFinancials) {
-      map[f.discipline] = f.fee_less_wip ?? 1000
-    }
-    return map
-  })
-  const [isPending, setIsPending] = useState(false)
-  const [error, setError] = useState(null)
-
-  const activeDiscs = DISCIPLINES.filter(d => feeLessWip[d] != null)
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    setIsPending(true)
-    try {
-      await c2cApi.recordWeek(projectId, phase, feeLessWip)
-      qc.invalidateQueries({ queryKey: ['c2c-snapshots', projectId] })
-      qc.invalidateQueries({ queryKey: ['c2c-stage-view', projectId, phase] })
-      qc.invalidateQueries({ queryKey: ['c2c-snapshot', latestSnap.id] })
-      onClose()
-    } catch (err) {
-      setError(err.response?.data?.error || err.message)
-    } finally {
-      setIsPending(false)
-    }
-  }
-
-  return (
-    <Modal title={`Record Week — ${latestSnap.week_label}`} onClose={onClose} size="sm">
-      <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 16 }}>
-        Confirm the Fee less WIP for each discipline, then advance to the next week.
-        The current week will be locked for editing.
-      </p>
-      <form onSubmit={handleSubmit}>
-        {activeDiscs.length === 0 && (
-          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 12 }}>
-            No discipline financials set up yet for this phase.
-          </p>
-        )}
-        {activeDiscs.map(disc => (
-          <FormField key={disc} label={disc}>
-            <input
-              className="form-input"
-              type="number"
-              step="100"
-              value={feeLessWip[disc] ?? ''}
-              onChange={e => setFeeLessWip(prev => ({ ...prev, [disc]: parseFloat(e.target.value) || 0 }))}
-            />
-          </FormField>
-        ))}
-        {error && <div className="error-banner mb-4">{error}</div>}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>Cancel</button>
-          <button type="submit" className="btn btn-primary btn-sm" disabled={isPending}>
-            {isPending ? 'Recording…' : 'Record & Advance to Next Week'}
-          </button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
-// ─── Submit to Management Modal ───────────────────────────────────────────────
-
-function SubmitModal({ projectId, snap, onClose }) {
-  const qc = useQueryClient()
-  const mut = useMutation({
-    mutationFn: () => c2cApi.submitSnapshot(projectId, snap.id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['c2c-snapshots', projectId] })
-      qc.invalidateQueries({ queryKey: ['c2c-stage-view', projectId, snap.phase] })
-      onClose()
-    },
-  })
-
-  return (
-    <Modal title="Submit to Management" onClose={onClose} size="sm">
-      <p style={{ fontSize: 13, marginBottom: 16 }}>
-        Submit <strong>{snap.week_label}</strong> for management review?
-      </p>
-      <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 16 }}>
-        Once submitted, this week will be read-only. An admin can unlock it if changes are needed.
-      </p>
-      {mut.isError && <div className="error-banner mb-4">{mut.error?.response?.data?.error || mut.error?.message}</div>}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>Cancel</button>
-        <button
-          className="btn btn-sm"
-          style={{ background: '#f59e0b', color: '#fff', border: 'none' }}
-          disabled={mut.isPending}
-          onClick={() => mut.mutate()}
-        >
-          {mut.isPending ? 'Submitting…' : 'Submit to Management'}
-        </button>
-      </div>
-    </Modal>
-  )
-}
-
-// ─── Admin Unlock Modal ───────────────────────────────────────────────────────
-
-function AdminUnlockModal({ projectId, snap, onClose }) {
-  const qc = useQueryClient()
-  const [reason, setReason] = useState('')
-  const mut = useMutation({
-    mutationFn: () => c2cApi.adminUnlock(projectId, snap.id, reason),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['c2c-snapshots', projectId] })
-      qc.invalidateQueries({ queryKey: ['c2c-stage-view', projectId, snap.phase] })
-      onClose()
-    },
-  })
-
-  return (
-    <Modal title="Unlock Week (Admin)" onClose={onClose} size="sm">
-      <p style={{ fontSize: 13, marginBottom: 12 }}>
-        Unlock <strong>{snap.week_label}</strong> for editing? This will revert it from <em>Submitted</em> to <em>Draft</em>.
-      </p>
-      <FormField label="Reason for unlocking">
-        <textarea
-          className="form-input"
-          rows={3}
-          value={reason}
-          onChange={e => setReason(e.target.value)}
-          placeholder="e.g. Fee less WIP correction requested by PM"
-          style={{ resize: 'none' }}
-        />
-      </FormField>
-      {mut.isError && <div className="error-banner mb-4">{mut.error?.response?.data?.error || mut.error?.message}</div>}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={onClose}>Cancel</button>
-        <button
-          className="btn btn-sm"
-          style={{ background: 'var(--color-negative)', color: '#fff', border: 'none' }}
-          disabled={mut.isPending || !reason.trim()}
-          onClick={() => mut.mutate()}
-        >
-          {mut.isPending ? 'Unlocking…' : 'Unlock for Editing'}
         </button>
       </div>
     </Modal>
@@ -629,7 +477,7 @@ function StageFinancialsTable({ snapshots, resources, financials }) {
   )
 }
 
-function StageView({ data, onToggleLock, onUpdateAllocation, onSubmit, onAdminUnlock, isAdmin }) {
+function StageView({ data, onToggleLock, onUpdateAllocation }) {
   const { snapshots, resources, financials } = data
   const nFixed = 2  // Resource + Rate
   const nTrail = 2  // Total Hrs + Phase CTC
@@ -661,29 +509,17 @@ function StageView({ data, onToggleLock, onUpdateAllocation, onSubmit, onAdminUn
                 </th>
               ))}
               {/* Dynamic: one column per week snapshot — click header to toggle lock */}
-              {snapshots.map((snap, si) => {
-                const isSubmitted = snap.submission_status === 'submitted'
-                const icon = isSubmitted ? '✅' : snap.snapshot_locked ? '🔒' : '🔓'
-                const titleText = isSubmitted
-                  ? `Submitted${snap.submitted_by ? ' by ' + snap.submitted_by : ''}${snap.submitted_at ? ' on ' + snap.submitted_at.slice(0,10) : ''}`
-                  : snap.snapshot_locked ? 'Click to unlock week' : 'Click to lock week'
-                return (
-                  <th
-                    key={snap.id}
-                    style={{
-                      textAlign: 'right',
-                      cursor: isSubmitted ? 'default' : 'pointer',
-                      userSelect: 'none',
-                      background: isSubmitted ? 'rgba(16,185,129,0.18)' : undefined,
-                    }}
-                    onClick={() => !isSubmitted && onToggleLock(snap.id)}
-                    title={titleText}
-                  >
-                    W{snap.week_number} {icon}
-                    <div className="col-resize-handle" onMouseDown={e => { e.stopPropagation(); startResize(nFixed + si, e) }} onClick={e => e.stopPropagation()} />
-                  </th>
-                )
-              })}
+              {snapshots.map((snap, si) => (
+                <th
+                  key={snap.id}
+                  style={{ textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => onToggleLock(snap.id)}
+                  title={snap.snapshot_locked ? 'Click to unlock week' : 'Click to lock week'}
+                >
+                  W{snap.week_number} {snap.snapshot_locked ? '🔒' : '🔓'}
+                  <div className="col-resize-handle" onMouseDown={e => { e.stopPropagation(); startResize(nFixed + si, e) }} onClick={e => e.stopPropagation()} />
+                </th>
+              ))}
               {/* Trailing: Total Hrs + Phase CTC — right-frozen so always visible */}
               {[
                 { label: 'Total Hrs', ci: nFixed + snapshots.length, right: widths[widths.length - 1] },
@@ -896,8 +732,6 @@ function DesignFinancialsTable({ financials, onUpdateFinancial, locked }) {
 
 export default function C2CPage() {
   const { projectId } = useProject()
-  const { user } = useAuth()
-  const isAdmin = user?.role === 'admin'
   const qc = useQueryClient()
   const [selectedSnapshotId, setSelectedSnapshotId] = useState(null)
   const [phaseFilter, setPhaseFilter] = useState('design')
@@ -905,9 +739,6 @@ export default function C2CPage() {
   const [showDelete, setShowDelete] = useState(false)
   const [stageView, setStageView] = useState(true)
   const [showTrend, setShowTrend] = useState(false)
-  const [showRecordWeek, setShowRecordWeek] = useState(false)
-  const [showSubmit, setShowSubmit] = useState(false)
-  const [showAdminUnlock, setShowAdminUnlock] = useState(null) // holds snapshot object
 
   const { data: snapshots = [] } = useQuery({
     queryKey: ['c2c-snapshots', projectId],
@@ -974,22 +805,12 @@ export default function C2CPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['c2c-snapshot', selectedSnapshotId] }),
   })
 
-  const recordWeekMut = useMutation({
-    mutationFn: feeLessWip => c2cApi.recordWeek(projectId, phaseFilter, feeLessWip),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['c2c-snapshots', projectId] })
-      qc.invalidateQueries({ queryKey: ['c2c-stage-view', projectId, phaseFilter] })
-    },
-  })
-
   if (!projectId) return <div className="empty-state">Select a project to view the C2C tracker.</div>
 
   const locked = activeSnap?.snapshot_locked === 1
   const allocations = snapDetail?.allocations || []
   const financials = snapDetail?.financials || []
   const lastPhaseSnap = filteredSnaps.length > 0 ? filteredSnaps[filteredSnaps.length - 1] : null
-  const latestIsSubmitted = lastPhaseSnap?.submission_status === 'submitted'
-  const latestIsLocked = lastPhaseSnap?.snapshot_locked === 1
 
   return (
     <div>
@@ -1001,21 +822,7 @@ export default function C2CPage() {
           {lastPhaseSnap && (
             <button className="btn btn-secondary btn-sm" onClick={() => setShowDelete(true)}>Delete Last Week</button>
           )}
-          {lastPhaseSnap && latestIsLocked && !latestIsSubmitted && (
-            <button
-              className="btn btn-sm"
-              style={{ background: '#f59e0b', color: '#fff', border: 'none' }}
-              onClick={() => setShowSubmit(true)}
-            >
-              Submit to Management
-            </button>
-          )}
-          {lastPhaseSnap && !latestIsSubmitted && (
-            <button className="btn btn-primary btn-sm" onClick={() => setShowRecordWeek(true)}>
-              Record Week
-            </button>
-          )}
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowNew(true)}>+ Add Week</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}>+ Add Week</button>
         </>}
       />
 
@@ -1064,41 +871,6 @@ export default function C2CPage() {
         )}
       </div>
 
-      {/* ── Current week status bar ── */}
-      {lastPhaseSnap && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10,
-          padding: '6px 12px', background: 'var(--color-secondary)',
-          borderRadius: 'var(--radius-md)', fontSize: 12,
-        }}>
-          <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
-            Latest: {lastPhaseSnap.week_label}
-          </span>
-          <span style={{
-            padding: '2px 8px', borderRadius: 3, fontSize: 11, fontWeight: 600,
-            background: latestIsSubmitted ? '#d1fae5' : latestIsLocked ? '#fef3c7' : '#dbeafe',
-            color: latestIsSubmitted ? '#065f46' : latestIsLocked ? '#92400e' : '#1e40af',
-          }}>
-            {latestIsSubmitted ? '✅ Submitted' : latestIsLocked ? '🔒 Locked — Ready to Submit' : '🔓 Draft — In Progress'}
-          </span>
-          {latestIsSubmitted && lastPhaseSnap.submitted_by && (
-            <span style={{ color: 'var(--color-text-muted)' }}>
-              by {lastPhaseSnap.submitted_by}
-              {lastPhaseSnap.submitted_at ? ' on ' + lastPhaseSnap.submitted_at.slice(0, 10) : ''}
-            </span>
-          )}
-          {lastPhaseSnap.submission_status === 'submitted' && isAdmin && (
-            <button
-              className="btn btn-sm"
-              style={{ marginLeft: 'auto', fontSize: 11, background: 'var(--color-negative)', color: '#fff', border: 'none' }}
-              onClick={() => setShowAdminUnlock(lastPhaseSnap)}
-            >
-              Admin Unlock
-            </button>
-          )}
-        </div>
-      )}
-
       {/* ── Row 2: Phase selector — standard tab style, independent of view mode ── */}
       <div className="tab-strip mb-4">
         {['design', 'construction'].map(phase => (
@@ -1124,8 +896,6 @@ export default function C2CPage() {
                   data={stageData}
                   onToggleLock={sid => toggleLockMut.mutate(sid)}
                   onUpdateAllocation={item => stageUpdateAllocMut.mutate(item)}
-                  onAdminUnlock={snap => setShowAdminUnlock(snap)}
-                  isAdmin={isAdmin}
                 />
               : <div className="empty-state card" style={{ padding: 32 }}>No {phaseFilter} weeks found. Add a week first.</div>
       )}
@@ -1222,32 +992,6 @@ export default function C2CPage() {
           selectedSnapshotId={selectedSnapshotId}
           onDeleted={() => setSelectedSnapshotId(null)}
           onClose={() => setShowDelete(false)}
-        />
-      )}
-
-      {showRecordWeek && lastPhaseSnap && stageData && (
-        <RecordWeekModal
-          projectId={projectId}
-          phase={phaseFilter}
-          latestSnap={lastPhaseSnap}
-          currentFinancials={stageData.financials || []}
-          onClose={() => setShowRecordWeek(false)}
-        />
-      )}
-
-      {showSubmit && lastPhaseSnap && (
-        <SubmitModal
-          projectId={projectId}
-          snap={lastPhaseSnap}
-          onClose={() => setShowSubmit(false)}
-        />
-      )}
-
-      {showAdminUnlock && (
-        <AdminUnlockModal
-          projectId={projectId}
-          snap={showAdminUnlock}
-          onClose={() => setShowAdminUnlock(null)}
         />
       )}
     </div>

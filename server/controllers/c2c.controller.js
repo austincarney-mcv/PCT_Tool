@@ -117,47 +117,8 @@ function stageView(req, res) {
   res.json(svc.getStageView(req.params.id, phase));
 }
 
-function recordWeek(req, res) {
-  const { phase, fee_less_wip } = req.body;
-  if (!phase || !['design', 'construction'].includes(phase)) {
-    return res.status(400).json({ error: 'phase required (design or construction)' });
-  }
-  try {
-    const result = svc.recordWeek(req.params.id, phase, fee_less_wip || {});
-    res.json(result);
-  } catch (err) {
-    res.status(err.status || 500).json({ error: err.message });
-  }
-}
-
-function submitSnapshot(req, res) {
-  const db = require('../config/database').getDb();
-  const snap = db.prepare('SELECT id FROM c2c_snapshots WHERE id = ? AND project_id = ?').get(req.params.sid, req.params.id);
-  if (!snap) return res.status(404).json({ error: 'Snapshot not found' });
-  try {
-    svc.submitSnapshot(req.params.sid, req.user?.username);
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(err.status || 500).json({ error: err.message });
-  }
-}
-
-function adminUnlockSnapshot(req, res) {
-  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
-  const db = require('../config/database').getDb();
-  const snap = db.prepare('SELECT id FROM c2c_snapshots WHERE id = ? AND project_id = ?').get(req.params.sid, req.params.id);
-  if (!snap) return res.status(404).json({ error: 'Snapshot not found' });
-  try {
-    svc.adminUnlockSnapshot(req.params.sid, req.body?.reason);
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(err.status || 500).json({ error: err.message });
-  }
-}
-
 module.exports = {
   listSnapshots, getSnapshot, createSnapshot, lockSnapshot, unlockSnapshot, deleteSnapshot,
   getAllocations, updateAllocations, getFinancials, updateFinancials,
   trend, stageView,
-  recordWeek, submitSnapshot, adminUnlockSnapshot,
 };
