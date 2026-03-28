@@ -6,6 +6,8 @@ export const c2cApi = {
   createSnapshot:   (pid, d)   => api.post(`/projects/${pid}/c2c/snapshots`, d).then(r => r.data),
   lockSnapshot:     (pid, sid) => api.put(`/projects/${pid}/c2c/snapshots/${sid}/lock`).then(r => r.data),
   unlockSnapshot:   (pid, sid) => api.put(`/projects/${pid}/c2c/snapshots/${sid}/unlock`).then(r => r.data),
+  adminUnlock:      (pid, sid) => api.put(`/projects/${pid}/c2c/snapshots/${sid}/admin-unlock`).then(r => r.data),
+  adminRelock:      (pid, sid) => api.put(`/projects/${pid}/c2c/snapshots/${sid}/admin-relock`).then(r => r.data),
   deleteSnapshot:   (pid, sid) => api.delete(`/projects/${pid}/c2c/snapshots/${sid}`).then(r => r.data),
   trend:            pid        => api.get(`/projects/${pid}/c2c/trend`).then(r => r.data),
   getStageView:     (pid, phase) => api.get(`/projects/${pid}/c2c/stage-view?phase=${phase}`).then(r => r.data),

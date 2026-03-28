@@ -76,8 +76,9 @@ CREATE TABLE IF NOT EXISTS c2c_snapshots (
     week_number      INTEGER NOT NULL CHECK (week_number >= 1),
     snapshot_date    TEXT    NOT NULL,
     week_label       TEXT    NOT NULL,
-    snapshot_locked  INTEGER NOT NULL DEFAULT 1 CHECK (snapshot_locked IN (0,1)),
-    created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+    snapshot_locked       INTEGER NOT NULL DEFAULT 1 CHECK (snapshot_locked IN (0,1)),
+    admin_unlocked_until  TEXT,                          -- ISO datetime, NULL means no admin override
+    created_at            TEXT    NOT NULL DEFAULT (datetime('now')),
     UNIQUE (project_id, phase, week_number)
 );
 CREATE INDEX IF NOT EXISTS idx_c2c_snapshots_project

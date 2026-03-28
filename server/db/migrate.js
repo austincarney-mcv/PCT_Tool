@@ -28,6 +28,15 @@ function migrate() {
   });
 
   runMigrations();
+
+  // Incremental column additions for existing databases (safe to re-run)
+  const alters = [
+    'ALTER TABLE c2c_snapshots ADD COLUMN admin_unlocked_until TEXT',
+  ];
+  for (const sql of alters) {
+    try { db.prepare(sql).run(); } catch { /* column already exists — safe to ignore */ }
+  }
+
   console.log('[migrate] Schema applied successfully.');
 }
 

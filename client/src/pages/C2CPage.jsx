@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { c2cApi } from '../api/c2c.api'
 import { useProject } from '../context/ProjectContext'
+import { useAuth } from '../context/AuthContext'
 import PageHeader from '../components/layout/PageHeader'
 import Modal from '../components/common/Modal'
 import FormField from '../components/common/FormField'
@@ -12,6 +13,23 @@ import C2CTrendChart from '../components/c2c/C2CTrendChart'
 import { useColumnResize } from '../hooks/useColumnResize'
 
 const DISCIPLINES = ['Architecture','Civil','Structural','Hydraulics','Landscaping','Certifier','Fire Engineering','Fire Services','Builder/CM']
+
+// Returns 'past' | 'current' | 'future' for a given ISO date string.
+// Active Monday = this week's Mon on Mon–Fri, next Monday on Sat–Sun.
+function getWeekStatus(snapshotDate) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const dow = today.getDay()
+  const shift = dow === 0 ? 1 : dow === 6 ? 2 : 1 - dow
+  const activeMon = new Date(today)
+  activeMon.setDate(activeMon.getDate() + shift)
+  const activeMonMs = activeMon.getTime()
+  const nextMonMs   = activeMonMs + 7 * 24 * 60 * 60 * 1000
+  const ms = new Date((snapshotDate || '') + 'T00:00:00').getTime()
+  if (isNaN(ms)) return 'future'
+  if (ms >= activeMonMs && ms < nextMonMs) return 'current'
+  return ms < activeMonMs ? 'past' : 'future'
+}
 // fmt — whole-dollar amounts (financial summary, agreed fee, etc.)
 const fmt = v => v != null ? `$${Number(v).toLocaleString('en-AU', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '—'
 // fmtCents — cent-precision display used for Cost/Wk; truncates to 2dp, no rounding beyond the cent
@@ -477,7 +495,7 @@ function StageFinancialsTable({ snapshots, resources, financials }) {
   )
 }
 
-function StageView({ data, onToggleLock, onUpdateAllocation }) {
+function StageView({ data, isAdmin, onAdminUnlock, onAdminRelock, onUpdateAllocation }) {
   const { snapshots, resources, financials } = data
   const nFixed = 2  // Resource + Rate
   const nTrail = 2  // Total Hrs + Phase CTC
@@ -492,25 +510,8 @@ function StageView({ data, onToggleLock, onUpdateAllocation }) {
     return acc
   }, {})
 
-  // ── Week colouring based on calendar date ─────────────────────────────────
-  // "Active Monday" = this week's Monday on Mon–Fri, next Monday on Sat–Sun.
-  // This way a completed work week flips to 'past' over the weekend so the
-  // upcoming Monday column lights up as 'current' ready for the new week.
-  const _today = new Date()
-  _today.setHours(0, 0, 0, 0)
-  const _dow = _today.getDay() // 0=Sun … 6=Sat
-  const _shift = _dow === 0 ? 1 : _dow === 6 ? 2 : 1 - _dow // days to active Monday
-  const _activeMon = new Date(_today)
-  _activeMon.setDate(_activeMon.getDate() + _shift)
-  const activeMonMs  = _activeMon.getTime()
-  const nextMonMs    = activeMonMs + 7 * 24 * 60 * 60 * 1000
-
-  const snapStatus = snap => {
-    const ms = new Date((snap.snapshot_date || '') + 'T00:00:00').getTime()
-    if (isNaN(ms)) return 'future'
-    if (ms >= activeMonMs && ms < nextMonMs) return 'current'
-    return ms < activeMonMs ? 'past' : 'future'
-  }
+  // Use shared getWeekStatus utility (defined at module level)
+  const snapStatus = snap => getWeekStatus(snap.snapshot_date)
   // Header backgrounds (override the primary header colour)
   const WEEK_HEAD_BG = { past: '#6b9e82', current: '#d97706', future: undefined }
   // Body cell styles for past / current / future columns
@@ -536,17 +537,40 @@ function StageView({ data, onToggleLock, onUpdateAllocation }) {
               {/* Dynamic: one column per week snapshot — click header to toggle lock */}
               {snapshots.map((snap, si) => {
                 const status = snapStatus(snap)
+                // Past weeks: admin can click to unlock/relock. Others: header is non-interactive.
+                const isPast      = status === 'past'
+                const adminCanAct = isAdmin && isPast
+                const handleClick = adminCanAct ? () => {
+                  if (snap.snapshot_locked) {
+                    if (window.confirm(`Unlock W${snap.week_number} for 24 hours?\n\nIt will automatically re-lock tomorrow.`))
+                      onAdminUnlock(snap.id)
+                  } else {
+                    if (window.confirm(`Re-lock W${snap.week_number} now?`))
+                      onAdminRelock(snap.id)
+                  }
+                } : undefined
+
+                // Lock icon: shown only on past weeks
+                const lockIcon = isPast ? (snap.snapshot_locked ? ' 🔒' : ' 🔓') : ''
+                const titleTxt = isPast
+                  ? snap.snapshot_locked
+                    ? isAdmin ? 'Admin: click to unlock for 24 hours' : 'Past week — locked'
+                    : isAdmin ? 'Admin: click to re-lock' : 'Past week — admin unlocked'
+                  : status === 'current' ? 'Current week' : 'Future week'
+
                 return (
                   <th
                     key={snap.id}
                     style={{
-                      textAlign: 'right', cursor: 'pointer', userSelect: 'none',
+                      textAlign: 'right',
+                      cursor: adminCanAct ? 'pointer' : 'default',
+                      userSelect: 'none',
                       background: WEEK_HEAD_BG[status],
                     }}
-                    onClick={() => onToggleLock(snap.id)}
-                    title={snap.snapshot_locked ? 'Click to unlock week' : 'Click to lock week'}
+                    onClick={handleClick}
+                    title={titleTxt}
                   >
-                    W{snap.week_number} {snap.snapshot_locked ? '🔒' : '🔓'}
+                    W{snap.week_number}{lockIcon}
                     <div className="col-resize-handle" onMouseDown={e => { e.stopPropagation(); startResize(nFixed + si, e) }} onClick={e => e.stopPropagation()} />
                   </th>
                 )
@@ -763,6 +787,8 @@ function DesignFinancialsTable({ financials, onUpdateFinancial, locked }) {
 
 export default function C2CPage() {
   const { projectId } = useProject()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   const qc = useQueryClient()
   const [selectedSnapshotId, setSelectedSnapshotId] = useState(null)
   const [phaseFilter, setPhaseFilter] = useState('design')
@@ -806,18 +832,20 @@ export default function C2CPage() {
     enabled: !!projectId && !!selectedSnapshotId,
   })
 
-  const toggleLockMut = useMutation({
-    mutationFn: sid => {
-      const snap = snapshots.find(s => s.id === sid)
-      return snap?.snapshot_locked
-        ? c2cApi.unlockSnapshot(projectId, sid)
-        : c2cApi.lockSnapshot(projectId, sid)
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['c2c-snapshots', projectId] })
-      qc.invalidateQueries({ queryKey: ['c2c-snapshot', selectedSnapshotId] })
-      qc.invalidateQueries({ queryKey: ['c2c-stage-view', projectId, phaseFilter] })
-    },
+  const invalidateLockQueries = () => {
+    qc.invalidateQueries({ queryKey: ['c2c-snapshots', projectId] })
+    qc.invalidateQueries({ queryKey: ['c2c-snapshot', selectedSnapshotId] })
+    qc.invalidateQueries({ queryKey: ['c2c-stage-view', projectId, phaseFilter] })
+  }
+
+  const adminUnlockMut = useMutation({
+    mutationFn: sid => c2cApi.adminUnlock(projectId, sid),
+    onSuccess: invalidateLockQueries,
+  })
+
+  const adminRelockMut = useMutation({
+    mutationFn: sid => c2cApi.adminRelock(projectId, sid),
+    onSuccess: invalidateLockQueries,
   })
 
   const updateAllocMut = useMutation({
@@ -925,7 +953,9 @@ export default function C2CPage() {
               ? <StageView
                   key={`${phaseFilter}-${stageData.snapshots.length}`}
                   data={stageData}
-                  onToggleLock={sid => toggleLockMut.mutate(sid)}
+                  isAdmin={isAdmin}
+                  onAdminUnlock={sid => adminUnlockMut.mutate(sid)}
+                  onAdminRelock={sid => adminRelockMut.mutate(sid)}
                   onUpdateAllocation={item => stageUpdateAllocMut.mutate(item)}
                 />
               : <div className="empty-state card" style={{ padding: 32 }}>No {phaseFilter} weeks found. Add a week first.</div>
@@ -939,18 +969,33 @@ export default function C2CPage() {
             <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 600 }}>WEEK:</span>
               {filteredSnaps.map(s => {
-                const isSelected = s.id === selectedSnapshotId
+                const isSelected  = s.id === selectedSnapshotId
+                const wkStatus    = getWeekStatus(s.snapshot_date)
+                const isPast      = wkStatus === 'past'
+                const lockIcon    = isPast ? (s.snapshot_locked ? ' 🔒' : ' 🔓') : ''
+                const adminCanAct = isAdmin && isPast && isSelected
+
+                const handleClick = () => {
+                  if (!isSelected) { setSelectedSnapshotId(s.id); return }
+                  if (!adminCanAct) return
+                  if (s.snapshot_locked) {
+                    if (window.confirm(`Unlock W${s.week_number} for 24 hours?\n\nIt will automatically re-lock tomorrow.`))
+                      adminUnlockMut.mutate(s.id)
+                  } else {
+                    if (window.confirm(`Re-lock W${s.week_number} now?`))
+                      adminRelockMut.mutate(s.id)
+                  }
+                }
+
+                const titleTxt = isSelected && isPast && isAdmin
+                  ? s.snapshot_locked ? 'Admin: click to unlock for 24 hours' : 'Admin: click to re-lock'
+                  : `Switch to W${s.week_number}`
+
                 return (
                   <button
                     key={s.id}
-                    onClick={() => {
-                      if (isSelected) {
-                        toggleLockMut.mutate(s.id)
-                      } else {
-                        setSelectedSnapshotId(s.id)
-                      }
-                    }}
-                    title={isSelected ? (s.snapshot_locked ? 'Click to unlock week' : 'Click to lock week') : `Switch to W${s.week_number}`}
+                    onClick={handleClick}
+                    title={titleTxt}
                     style={{
                       padding: '3px 12px',
                       borderRadius: 3,
@@ -961,7 +1006,7 @@ export default function C2CPage() {
                       fontWeight: isSelected ? 600 : 400,
                     }}
                   >
-                    W{s.week_number} {s.snapshot_locked ? '🔒' : '🔓'}
+                    W{s.week_number}{lockIcon}
                   </button>
                 )
               })}

@@ -105,6 +105,24 @@ function updateFinancials(req, res) {
   }
 }
 
+function adminUnlock(req, res) {
+  try {
+    svc.adminUnlockSnapshot(req.params.sid);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+}
+
+function adminRelock(req, res) {
+  try {
+    svc.adminRelockSnapshot(req.params.sid);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+}
+
 function trend(req, res) {
   res.json(svc.getTrend(req.params.id));
 }
@@ -119,6 +137,7 @@ function stageView(req, res) {
 
 module.exports = {
   listSnapshots, getSnapshot, createSnapshot, lockSnapshot, unlockSnapshot, deleteSnapshot,
+  adminUnlock, adminRelock,
   getAllocations, updateAllocations, getFinancials, updateFinancials,
   trend, stageView,
 };

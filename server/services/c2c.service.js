@@ -1,6 +1,18 @@
 const { getDb } = require('../config/database');
 const { WEEK_HOURS } = require('../config/constants');
 
+// Returns the ISO date string (YYYY-MM-DD) of the "active Monday":
+// Mon–Fri → this week's Monday; Sat–Sun → next Monday.
+// Mirrors the same logic used on the client for column highlighting.
+function getActiveMondayStr() {
+  const today = new Date();
+  const dow = today.getDay(); // 0=Sun … 6=Sat
+  const shift = dow === 0 ? 1 : dow === 6 ? 2 : 1 - dow;
+  const mon = new Date(today);
+  mon.setDate(mon.getDate() + shift);
+  return mon.toISOString().slice(0, 10);
+}
+
 function assertUnlocked(snapshotId) {
   const db = getDb();
   const snap = db.prepare('SELECT snapshot_locked FROM c2c_snapshots WHERE id = ?').get(snapshotId);
@@ -197,10 +209,32 @@ function deleteSnapshot(projectId, snapshotId) {
 
 function getStageView(projectId, phase) {
   const db = getDb();
+  const activeMon = getActiveMondayStr();
+  const nowIso    = new Date().toISOString();
+
+  // Auto-enforce lock states based on the server calendar:
+  // Past weeks (snapshot_date < activeMon) → lock unless a valid admin override exists
+  db.prepare(`
+    UPDATE c2c_snapshots
+    SET snapshot_locked = 1, admin_unlocked_until = NULL
+    WHERE project_id = ? AND phase = ?
+      AND snapshot_date < ?
+      AND snapshot_locked = 0
+      AND (admin_unlocked_until IS NULL OR admin_unlocked_until <= ?)
+  `).run(projectId, phase, activeMon, nowIso);
+
+  // Current / future weeks → always unlocked
+  db.prepare(`
+    UPDATE c2c_snapshots
+    SET snapshot_locked = 0
+    WHERE project_id = ? AND phase = ?
+      AND snapshot_date >= ?
+      AND snapshot_locked = 1
+  `).run(projectId, phase, activeMon);
 
   // 1. All snapshots for this project+phase ordered by week_number
   const snapshots = db.prepare(`
-    SELECT id, week_number, week_label, snapshot_locked, snapshot_date
+    SELECT id, week_number, week_label, snapshot_locked, snapshot_date, admin_unlocked_until
     FROM c2c_snapshots
     WHERE project_id = ? AND phase = ?
     ORDER BY week_number
@@ -282,8 +316,35 @@ function getTrend(projectId) {
   `).all(projectId);
 }
 
+// Admin temporarily unlocks a past week for 24 hours.
+function adminUnlockSnapshot(snapshotId) {
+  const db = getDb();
+  const snap = db.prepare('SELECT id FROM c2c_snapshots WHERE id = ?').get(snapshotId);
+  if (!snap) throw Object.assign(new Error('Snapshot not found'), { status: 404 });
+  const until = new Date();
+  until.setDate(until.getDate() + 1);
+  db.prepare(`
+    UPDATE c2c_snapshots
+    SET snapshot_locked = 0, admin_unlocked_until = ?
+    WHERE id = ?
+  `).run(until.toISOString(), snapshotId);
+}
+
+// Admin manually re-locks a past week (clears any override).
+function adminRelockSnapshot(snapshotId) {
+  const db = getDb();
+  const snap = db.prepare('SELECT id FROM c2c_snapshots WHERE id = ?').get(snapshotId);
+  if (!snap) throw Object.assign(new Error('Snapshot not found'), { status: 404 });
+  db.prepare(`
+    UPDATE c2c_snapshots
+    SET snapshot_locked = 1, admin_unlocked_until = NULL
+    WHERE id = ?
+  `).run(snapshotId);
+}
+
 module.exports = {
   getSnapshot, getAllocations, getFinancials, createSnapshot,
   updateAllocations, updateFinancials, lockSnapshot, unlockSnapshot, deleteSnapshot,
+  adminUnlockSnapshot, adminRelockSnapshot,
   getTrend, recalcDisciplineCosts, getStageView,
 };
