@@ -1,10 +1,22 @@
 const { getDb } = require('../config/database');
 const { WEEK_HOURS } = require('../config/constants');
 
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + 'T12:00:00')
+  d.setDate(d.getDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
+function serverWeekLabel(weekNum, dateStr) {
+  const d = new Date(dateStr + 'T12:00:00')
+  return `Week ${weekNum} - ${d.getDate()} ${d.toLocaleString('en-AU', { month: 'long' })}`
+}
+
 function assertUnlocked(snapshotId) {
   const db = getDb();
-  const snap = db.prepare('SELECT snapshot_locked FROM c2c_snapshots WHERE id = ?').get(snapshotId);
+  const snap = db.prepare('SELECT snapshot_locked, submission_status FROM c2c_snapshots WHERE id = ?').get(snapshotId);
   if (!snap) throw Object.assign(new Error('Snapshot not found'), { status: 404 });
+  if (snap.submission_status === 'submitted') throw Object.assign(new Error('Snapshot has been submitted and cannot be modified'), { status: 403 });
   if (snap.snapshot_locked) throw Object.assign(new Error('Snapshot is locked and cannot be modified'), { status: 403 });
 }
 
@@ -33,13 +45,13 @@ function getFinancials(snapshotId) {
   return db.prepare('SELECT * FROM c2c_discipline_financials WHERE snapshot_id = ? ORDER BY discipline').all(snapshotId);
 }
 
-function createSnapshot(projectId, { phase, week_number, snapshot_date, week_label }) {
+function createSnapshot(projectId, { phase, week_number, snapshot_date, week_label, locked = true }) {
   const db = getDb();
   // Insert snapshot (locked by default)
   const result = db.prepare(`
     INSERT INTO c2c_snapshots (project_id, phase, week_number, snapshot_date, week_label, snapshot_locked)
-    VALUES (?, ?, ?, ?, ?, 1)
-  `).run(projectId, phase, week_number, snapshot_date, week_label);
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(projectId, phase, week_number, snapshot_date, week_label, locked !== false ? 1 : 0);
   const snapshotId = result.lastInsertRowid;
 
   // Find previous snapshot to copy allocations from
@@ -200,7 +212,7 @@ function getStageView(projectId, phase) {
 
   // 1. All snapshots for this project+phase ordered by week_number
   const snapshots = db.prepare(`
-    SELECT id, week_number, week_label, snapshot_locked
+    SELECT id, week_number, week_label, snapshot_locked, submission_status, submitted_at, submitted_by
     FROM c2c_snapshots
     WHERE project_id = ? AND phase = ?
     ORDER BY week_number
@@ -282,8 +294,101 @@ function getTrend(projectId) {
   `).all(projectId);
 }
 
+function recordWeek(projectId, phase, feeLessWipByDiscipline) {
+  const db = getDb();
+  const latest = db.prepare(`
+    SELECT * FROM c2c_snapshots
+    WHERE project_id = ? AND phase = ?
+    ORDER BY week_number DESC LIMIT 1
+  `).get(projectId, phase);
+
+  if (!latest) throw Object.assign(new Error('No weeks found for this phase'), { status: 404 });
+  if (latest.submission_status === 'submitted') throw Object.assign(new Error('Latest week is already submitted'), { status: 409 });
+
+  return db.transaction(() => {
+    // 1. Save fee_less_wip updates on the current snapshot
+    if (feeLessWipByDiscipline && Object.keys(feeLessWipByDiscipline).length > 0) {
+      const stmt = db.prepare(`
+        INSERT INTO c2c_discipline_financials (snapshot_id, discipline, fee_less_wip)
+        VALUES (?, ?, ?)
+        ON CONFLICT(snapshot_id, discipline) DO UPDATE SET fee_less_wip = excluded.fee_less_wip
+      `);
+      for (const [disc, val] of Object.entries(feeLessWipByDiscipline)) {
+        stmt.run(latest.id, disc, Number(val) || 0);
+      }
+    }
+
+    // 2. Lock the current snapshot
+    db.prepare('UPDATE c2c_snapshots SET snapshot_locked = 1 WHERE id = ?').run(latest.id);
+
+    // 3. Create next week snapshot (starts UNLOCKED for editing)
+    const nextNum  = latest.week_number + 1;
+    const nextDate = addDays(latest.snapshot_date, 7);
+    const nextLabel = serverWeekLabel(nextNum, nextDate);
+
+    const newRes = db.prepare(`
+      INSERT INTO c2c_snapshots (project_id, phase, week_number, snapshot_date, week_label, snapshot_locked)
+      VALUES (?, ?, ?, ?, ?, 0)
+    `).run(projectId, phase, nextNum, nextDate, nextLabel);
+    const newId = newRes.lastInsertRowid;
+
+    // 4. Copy allocations from the just-locked snapshot
+    const prevAllocs = db.prepare('SELECT * FROM c2c_resource_allocations WHERE snapshot_id = ?').all(latest.id);
+    const insertAlloc = db.prepare(`
+      INSERT INTO c2c_resource_allocations (snapshot_id, resource_id, weekly_utilisation, remaining_weeks, cost_calculated)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    for (const a of prevAllocs) {
+      const resource = db.prepare('SELECT hourly_rate FROM team_resources WHERE id = ?').get(a.resource_id);
+      const hours = a.weekly_utilisation * WEEK_HOURS * a.remaining_weeks;
+      const cost  = resource ? hours * resource.hourly_rate : 0;
+      insertAlloc.run(newId, a.resource_id, a.weekly_utilisation, a.remaining_weeks, cost);
+    }
+
+    // 5. Copy financials (including updated fee_less_wip) from the just-locked snapshot
+    const prevFins = db.prepare('SELECT * FROM c2c_discipline_financials WHERE snapshot_id = ?').all(latest.id);
+    const insertFin = db.prepare(`
+      INSERT INTO c2c_discipline_financials
+        (snapshot_id, discipline, agreed_fee, cost_at_close, net_to_carry,
+         synergy_net_residual, total_net_to_carry, construction_doc_cost_to_complete, fee_less_wip)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const f of prevFins) {
+      insertFin.run(newId, f.discipline, f.agreed_fee, f.cost_at_close,
+        f.net_to_carry, f.synergy_net_residual, f.total_net_to_carry,
+        f.construction_doc_cost_to_complete, f.fee_less_wip ?? 1000);
+    }
+
+    return { recorded_snapshot_id: latest.id, new_snapshot_id: newId, new_week_label: nextLabel };
+  })();
+}
+
+function submitSnapshot(snapshotId, username) {
+  const db = getDb();
+  const snap = db.prepare('SELECT id, submission_status FROM c2c_snapshots WHERE id = ?').get(snapshotId);
+  if (!snap) throw Object.assign(new Error('Snapshot not found'), { status: 404 });
+  if (snap.submission_status === 'submitted') throw Object.assign(new Error('Snapshot already submitted'), { status: 409 });
+  db.prepare(`
+    UPDATE c2c_snapshots
+    SET submission_status = 'submitted', submitted_at = datetime('now'), submitted_by = ?, snapshot_locked = 1
+    WHERE id = ?
+  `).run(username || null, snapshotId);
+}
+
+function adminUnlockSnapshot(snapshotId, reason) {
+  const db = getDb();
+  const snap = db.prepare('SELECT id FROM c2c_snapshots WHERE id = ?').get(snapshotId);
+  if (!snap) throw Object.assign(new Error('Snapshot not found'), { status: 404 });
+  db.prepare(`
+    UPDATE c2c_snapshots
+    SET submission_status = 'draft', snapshot_locked = 0, unlock_reason = ?
+    WHERE id = ?
+  `).run(reason || null, snapshotId);
+}
+
 module.exports = {
   getSnapshot, getAllocations, getFinancials, createSnapshot,
   updateAllocations, updateFinancials, lockSnapshot, unlockSnapshot, deleteSnapshot,
   getTrend, recalcDisciplineCosts, getStageView,
+  recordWeek, submitSnapshot, adminUnlockSnapshot,
 };
