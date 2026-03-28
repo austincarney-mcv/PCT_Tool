@@ -512,9 +512,10 @@ function StageView({ data, onToggleLock, onUpdateAllocation }) {
     return ms < activeMonMs ? 'past' : 'future'
   }
   // Header backgrounds (override the primary header colour)
-  const WEEK_HEAD_BG = { past: '#1d3027', current: '#d97706', future: undefined }
-  // Body cell backgrounds
-  const WEEK_BODY_BG = { past: 'rgba(0,0,0,0.028)', current: 'rgba(217,119,6,0.07)', future: undefined }
+  const WEEK_HEAD_BG = { past: '#6b9e82', current: '#d97706', future: undefined }
+  // Body cell styles for past / current / future columns
+  const WEEK_BODY_BG    = { past: '#f0f4f1', current: 'rgba(217,119,6,0.07)', future: undefined }
+  const WEEK_BODY_COLOR = { past: '#9aab9e', current: undefined, future: undefined }
 
   return (
     <>
@@ -601,7 +602,7 @@ function StageView({ data, onToggleLock, onUpdateAllocation }) {
                         const util  = alloc?.weekly_utilisation ?? 0
                         const locked = snap.snapshot_locked
                         return (
-                          <td key={snap.id} className="num" style={{ background: WEEK_BODY_BG[snapStatus(snap)] }}>
+                          <td key={snap.id} className="num" style={{ background: WEEK_BODY_BG[snapStatus(snap)], color: WEEK_BODY_COLOR[snapStatus(snap)] }}>
                             {locked ? (
                               util > 0 ? `${(util * 100).toFixed(0)}%` : '0%'
                             ) : (
