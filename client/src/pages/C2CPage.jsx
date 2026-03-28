@@ -495,23 +495,90 @@ function StageFinancialsTable({ snapshots, resources, financials }) {
   )
 }
 
+// ─── Utilisation cell ─────────────────────────────────────────────────────────
+// Idle:    shows "25%"  — click or tab to enter edit mode
+// Editing: shows decimal input (0–1).  Arrow ↑/↓ step 0.05; typing allows 0.01.
+function UtilCell({ util, alloc, snap, onUpdateAllocation }) {
+  const [editing, setEditing] = useState(false)
+  const [localUtil, setLocalUtil] = useState(util)
+  useEffect(() => { setLocalUtil(util) }, [util])
+
+  const commit = rawVal => {
+    const val = Math.max(0, Math.min(1, Math.round((parseFloat(rawVal) || 0) * 100) / 100))
+    setLocalUtil(val)
+    setEditing(false)
+    if (alloc?.allocation_id) {
+      onUpdateAllocation({
+        snapshotId: snap.id,
+        allocationId: alloc.allocation_id,
+        weekly_utilisation: val,
+        remaining_weeks: alloc.remaining_weeks ?? 0,
+      })
+    }
+  }
+
+  if (!editing) {
+    return (
+      <span
+        tabIndex={0}
+        style={{ display: 'block', textAlign: 'right', padding: '1px 6px', fontSize: 12, cursor: 'text', userSelect: 'none', minWidth: 44 }}
+        onClick={() => setEditing(true)}
+        onFocus={() => setEditing(true)}
+      >
+        {Math.round(localUtil * 100)}%
+      </span>
+    )
+  }
+
+  return (
+    <input
+      type="number"
+      step="0.01"        // allows 0.01 precision (e.g. 0.23 = 23%); arrow keys overridden to 0.05 below
+      min="0" max="1"
+      autoFocus
+      defaultValue={localUtil}
+      style={{ width: 52, textAlign: 'right', border: '1px solid var(--color-border)', borderRadius: 2, padding: '1px 4px', fontSize: 12 }}
+      onBlur={e => commit(e.target.value)}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === 'Escape') { e.target.blur(); return }
+        // Override arrow keys to step by 0.05 for fast bulk entry
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          e.preventDefault()
+          const next = Math.max(0, Math.min(1,
+            Math.round(((parseFloat(e.target.value) || 0) + (e.key === 'ArrowUp' ? 0.05 : -0.05)) * 100) / 100
+          ))
+          e.target.value = next.toFixed(2)
+        }
+      }}
+    />
+  )
+}
+
 function StageView({ data, isAdmin, onAdminUnlock, onAdminRelock, onUpdateAllocation }) {
   const { snapshots, resources, financials } = data
   const nFixed = 2  // Resource + Rate
   const nTrail = 2  // Total Hrs + Phase CTC
+
+  // Use shared getWeekStatus utility (defined at module level)
+  const snapStatus = snap => getWeekStatus(snap.snapshot_date)
+
+  // Past-week visibility toggle — hidden by default
+  const [showPast, setShowPast] = useState(false)
+  const visibleSnaps = showPast ? snapshots : snapshots.filter(s => snapStatus(s) !== 'past')
+
+  // Widths are always keyed on ALL snapshots so they survive toggle without losing user resizes.
+  // snapWidthIdx maps snapshot.id → its column index in the full widths array.
   const colWidths = [200, 90, ...snapshots.map(() => 80), 100, 120]
   const { widths, startResize } = useColumnResize(colWidths)
+  const snapWidthIdx = new Map(snapshots.map((s, i) => [s.id, nFixed + i]))
 
-  const NCOLS = nFixed + snapshots.length + nTrail
+  const NCOLS = nFixed + visibleSnaps.length + nTrail
 
   // Group resources by discipline preserving DISCIPLINES order
   const grouped = DISCIPLINES.reduce((acc, disc) => {
     acc[disc] = resources.filter(r => r.discipline === disc)
     return acc
   }, {})
-
-  // Use shared getWeekStatus utility (defined at module level)
-  const snapStatus = snap => getWeekStatus(snap.snapshot_date)
   // Header backgrounds (override the primary header colour)
   const WEEK_HEAD_BG = { past: '#6b9e82', current: '#d97706', future: undefined }
   // Body cell styles for past / current / future columns
@@ -520,10 +587,29 @@ function StageView({ data, isAdmin, onAdminUnlock, onAdminRelock, onUpdateAlloca
 
   return (
     <>
+      {/* Toolbar row — past-week toggle */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => setShowPast(v => !v)}
+          style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}
+        >
+          <span style={{ fontSize: 14 }}>👁</span>
+          {showPast ? 'Hide Past Weeks' : 'Show Past Weeks'}
+        </button>
+      </div>
+
       <div className="data-table-wrap data-table-wrap--scrollable">
         <table className="data-table data-table--sticky-col" style={{ tableLayout: 'fixed' }}>
           <colgroup>
-            {widths.map((w, i) => <col key={i} style={{ width: w }} />)}
+            {/* Fixed cols */}
+            <col style={{ width: widths[0] }} />
+            <col style={{ width: widths[1] }} />
+            {/* Visible week cols — looked up from the full widths array */}
+            {visibleSnaps.map(s => <col key={s.id} style={{ width: widths[snapWidthIdx.get(s.id)] }} />)}
+            {/* Trailing cols */}
+            <col style={{ width: widths[widths.length - 2] }} />
+            <col style={{ width: widths[widths.length - 1] }} />
           </colgroup>
           <thead>
             <tr>
@@ -534,8 +620,8 @@ function StageView({ data, isAdmin, onAdminUnlock, onAdminRelock, onUpdateAlloca
                   <div className="col-resize-handle" onMouseDown={e => startResize(ci, e)} onClick={e => e.stopPropagation()} />
                 </th>
               ))}
-              {/* Dynamic: one column per week snapshot — click header to toggle lock */}
-              {snapshots.map((snap, si) => {
+              {/* Dynamic: one column per visible week snapshot */}
+              {visibleSnaps.map(snap => {
                 const status = snapStatus(snap)
                 // Past weeks: admin can click to unlock/relock. Others: header is non-interactive.
                 const isPast      = status === 'past'
@@ -571,7 +657,7 @@ function StageView({ data, isAdmin, onAdminUnlock, onAdminRelock, onUpdateAlloca
                     title={titleTxt}
                   >
                     W{snap.week_number}{lockIcon}
-                    <div className="col-resize-handle" onMouseDown={e => { e.stopPropagation(); startResize(nFixed + si, e) }} onClick={e => e.stopPropagation()} />
+                    <div className="col-resize-handle" onMouseDown={e => { e.stopPropagation(); startResize(snapWidthIdx.get(snap.id), e) }} onClick={e => e.stopPropagation()} />
                   </th>
                 )
               })}
@@ -599,9 +685,9 @@ function StageView({ data, isAdmin, onAdminUnlock, onAdminRelock, onUpdateAlloca
             if (!group || group.length === 0) return null
 
             const discTotalHrs = group.reduce((sum, res) =>
-              sum + snapshots.reduce((s2, snap) => s2 + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0), 0)
+              sum + visibleSnaps.reduce((s2, snap) => s2 + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0), 0)
             const discPhaseCTC = group.reduce((sum, res) => {
-              const hrs = snapshots.reduce((s2, snap) => s2 + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0)
+              const hrs = visibleSnaps.reduce((s2, snap) => s2 + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0)
               return sum + hrs * res.hourly_rate
             }, 0)
 
@@ -613,7 +699,7 @@ function StageView({ data, isAdmin, onAdminUnlock, onAdminRelock, onUpdateAlloca
                 </tr>
 
                 {group.map(res => {
-                  const totalHours = snapshots.reduce((sum, snap) =>
+                  const totalHours = visibleSnaps.reduce((sum, snap) =>
                     sum + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0)
                   const phaseCTC = totalHours * res.hourly_rate
                   return (
@@ -621,30 +707,16 @@ function StageView({ data, isAdmin, onAdminUnlock, onAdminRelock, onUpdateAlloca
                       {/* Sticky first column — resource name */}
                       <td>{res.resource_name}</td>
                       <td className="num">{fmt(res.hourly_rate)}</td>
-                      {snapshots.map(snap => {
-                        const alloc = res.allocation_by_snapshot[snap.id]
-                        const util  = alloc?.weekly_utilisation ?? 0
+                      {visibleSnaps.map(snap => {
+                        const alloc  = res.allocation_by_snapshot[snap.id]
+                        const util   = alloc?.weekly_utilisation ?? 0
                         const locked = snap.snapshot_locked
                         return (
                           <td key={snap.id} className="num" style={{ background: WEEK_BODY_BG[snapStatus(snap)], color: WEEK_BODY_COLOR[snapStatus(snap)] }}>
-                            {locked ? (
-                              util > 0 ? `${(util * 100).toFixed(0)}%` : '0%'
-                            ) : (
-                              <input
-                                type="number" step="0.05" min="0" max="1"
-                                defaultValue={util}
-                                style={{ width: 56, textAlign: 'right', border: '1px solid var(--color-border)', borderRadius: 2, padding: '1px 4px', fontSize: 12 }}
-                                onBlur={e => {
-                                  if (!alloc?.allocation_id) return
-                                  onUpdateAllocation({
-                                    snapshotId: snap.id,
-                                    allocationId: alloc.allocation_id,
-                                    weekly_utilisation: parseFloat(e.target.value) || 0,
-                                    remaining_weeks: alloc.remaining_weeks ?? 0,
-                                  })
-                                }}
-                              />
-                            )}
+                            {locked
+                              ? `${Math.round(util * 100)}%`
+                              : <UtilCell util={util} alloc={alloc} snap={snap} onUpdateAllocation={onUpdateAllocation} />
+                            }
                           </td>
                         )
                       })}
@@ -661,7 +733,7 @@ function StageView({ data, isAdmin, onAdminUnlock, onAdminRelock, onUpdateAlloca
                     Total Hrs + Phase CTC are frozen to the right edge. */}
                 <tr className="group-subtotal" style={{ background: 'var(--color-tertiary)', fontWeight: 600, fontSize: 12 }}>
                   <td
-                    colSpan={nFixed + snapshots.length}
+                    colSpan={nFixed + visibleSnaps.length}
                     style={{
                       position: 'sticky',
                       left: 'calc(50% - 80px)',
