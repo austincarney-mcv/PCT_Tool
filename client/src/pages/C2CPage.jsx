@@ -492,6 +492,20 @@ function StageView({ data, onToggleLock, onUpdateAllocation }) {
     return acc
   }, {})
 
+  // ── Week colouring based on calendar date ─────────────────────────────────
+  const todayMs = new Date().setHours(0, 0, 0, 0)
+  const snapStatus = snap => {
+    const start = new Date(snap.snapshot_date + 'T00:00:00').getTime()
+    const end   = start + 7 * 24 * 60 * 60 * 1000
+    if (todayMs < start) return 'future'
+    if (todayMs >= end)  return 'past'
+    return 'current'
+  }
+  // Header backgrounds (override the primary header colour)
+  const WEEK_HEAD_BG = { past: '#1d3027', current: '#d97706', future: undefined }
+  // Body cell backgrounds
+  const WEEK_BODY_BG = { past: 'rgba(0,0,0,0.028)', current: 'rgba(217,119,6,0.07)', future: undefined }
+
   return (
     <>
       <div className="data-table-wrap data-table-wrap--scrollable">
@@ -509,17 +523,23 @@ function StageView({ data, onToggleLock, onUpdateAllocation }) {
                 </th>
               ))}
               {/* Dynamic: one column per week snapshot — click header to toggle lock */}
-              {snapshots.map((snap, si) => (
-                <th
-                  key={snap.id}
-                  style={{ textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
-                  onClick={() => onToggleLock(snap.id)}
-                  title={snap.snapshot_locked ? 'Click to unlock week' : 'Click to lock week'}
-                >
-                  W{snap.week_number} {snap.snapshot_locked ? '🔒' : '🔓'}
-                  <div className="col-resize-handle" onMouseDown={e => { e.stopPropagation(); startResize(nFixed + si, e) }} onClick={e => e.stopPropagation()} />
-                </th>
-              ))}
+              {snapshots.map((snap, si) => {
+                const status = snapStatus(snap)
+                return (
+                  <th
+                    key={snap.id}
+                    style={{
+                      textAlign: 'right', cursor: 'pointer', userSelect: 'none',
+                      background: WEEK_HEAD_BG[status],
+                    }}
+                    onClick={() => onToggleLock(snap.id)}
+                    title={snap.snapshot_locked ? 'Click to unlock week' : 'Click to lock week'}
+                  >
+                    W{snap.week_number} {snap.snapshot_locked ? '🔒' : '🔓'}
+                    <div className="col-resize-handle" onMouseDown={e => { e.stopPropagation(); startResize(nFixed + si, e) }} onClick={e => e.stopPropagation()} />
+                  </th>
+                )
+              })}
               {/* Trailing: Total Hrs + Phase CTC — right-frozen so always visible */}
               {[
                 { label: 'Total Hrs', ci: nFixed + snapshots.length, right: widths[widths.length - 1] },
@@ -571,7 +591,7 @@ function StageView({ data, onToggleLock, onUpdateAllocation }) {
                         const util  = alloc?.weekly_utilisation ?? 0
                         const locked = snap.snapshot_locked
                         return (
-                          <td key={snap.id} className="num">
+                          <td key={snap.id} className="num" style={{ background: WEEK_BODY_BG[snapStatus(snap)] }}>
                             {locked ? (
                               util > 0 ? `${(util * 100).toFixed(0)}%` : '0%'
                             ) : (
