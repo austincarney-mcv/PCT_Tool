@@ -494,8 +494,8 @@ function StageView({ data, onToggleLock, onUpdateAllocation }) {
 
   return (
     <>
-      <div className="data-table-wrap">
-        <table className="data-table" style={{ tableLayout: 'fixed' }}>
+      <div className="data-table-wrap data-table-wrap--scrollable">
+        <table className="data-table data-table--sticky-col" style={{ tableLayout: 'fixed' }}>
           <colgroup>
             {widths.map((w, i) => <col key={i} style={{ width: w }} />)}
           </colgroup>
@@ -520,38 +520,50 @@ function StageView({ data, onToggleLock, onUpdateAllocation }) {
                   <div className="col-resize-handle" onMouseDown={e => { e.stopPropagation(); startResize(nFixed + si, e) }} onClick={e => e.stopPropagation()} />
                 </th>
               ))}
-              {/* Trailing: Total Hrs, Phase CTC */}
-              {[{ label: 'Total Hrs', ci: nFixed + snapshots.length }, { label: 'Phase CTC', ci: nFixed + snapshots.length + 1 }].map(h => (
-                <th key={h.label} style={{ textAlign: 'right' }}>
+              {/* Trailing: Total Hrs + Phase CTC — right-frozen so always visible */}
+              {[
+                { label: 'Total Hrs', ci: nFixed + snapshots.length, right: widths[widths.length - 1] },
+                { label: 'Phase CTC', ci: nFixed + snapshots.length + 1, right: 0 },
+              ].map((h, i) => (
+                <th
+                  key={h.label}
+                  className={`sticky-right${i === 0 ? ' sticky-right-shadow' : ''}`}
+                  style={{ textAlign: 'right', right: h.right }}
+                >
                   {h.label}
                   <div className="col-resize-handle" onMouseDown={e => startResize(h.ci, e)} onClick={e => e.stopPropagation()} />
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody>
-            {DISCIPLINES.map(disc => {
-              const group = grouped[disc]
-              if (!group || group.length === 0) return null
 
-              // Discipline subtotals (use weekly_utilisation from allocation_by_snapshot)
-              const discTotalHrs = group.reduce((sum, res) =>
-                sum + snapshots.reduce((s2, snap) => s2 + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0), 0)
-              const discPhaseCTC = group.reduce((sum, res) => {
-                const hrs = snapshots.reduce((s2, snap) => s2 + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0)
-                return sum + hrs * res.hourly_rate
-              }, 0)
+          {/* Each discipline gets its own <tbody> so sticky group headers
+              push each other off naturally as you scroll through groups */}
+          {DISCIPLINES.map(disc => {
+            const group = grouped[disc]
+            if (!group || group.length === 0) return null
 
-              return [
-                <tr key={`hdr-${disc}`} className="group-header">
+            const discTotalHrs = group.reduce((sum, res) =>
+              sum + snapshots.reduce((s2, snap) => s2 + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0), 0)
+            const discPhaseCTC = group.reduce((sum, res) => {
+              const hrs = snapshots.reduce((s2, snap) => s2 + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0)
+              return sum + hrs * res.hourly_rate
+            }, 0)
+
+            return (
+              <tbody key={disc}>
+                {/* Sticky group sub-header — sticks below thead within this tbody */}
+                <tr className="group-header">
                   <td colSpan={NCOLS}>{disc} Resource Program</td>
-                </tr>,
-                ...group.map(res => {
+                </tr>
+
+                {group.map(res => {
                   const totalHours = snapshots.reduce((sum, snap) =>
                     sum + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0)
                   const phaseCTC = totalHours * res.hourly_rate
                   return (
                     <tr key={res.resource_id}>
+                      {/* Sticky first column — resource name */}
                       <td>{res.resource_name}</td>
                       <td className="num">{fmt(res.hourly_rate)}</td>
                       {snapshots.map(snap => {
@@ -581,22 +593,43 @@ function StageView({ data, onToggleLock, onUpdateAllocation }) {
                           </td>
                         )
                       })}
-                      <td className="num">{totalHours.toFixed(1)}</td>
-                      <td className="num">{fmtCents(phaseCTC)}</td>
+                      {/* Right-frozen totals — always visible */}
+                      <td className="num sticky-right sticky-right-shadow" style={{ right: widths[widths.length - 1] }}>{totalHours.toFixed(1)}</td>
+                      <td className="num sticky-right" style={{ right: 0 }}>{fmtCents(phaseCTC)}</td>
                     </tr>
                   )
-                }),
-                // Discipline subtotal row
-                <tr key={`sub-${disc}`} style={{ background: 'var(--color-tertiary)', fontWeight: 600, fontSize: 12 }}>
-                  <td colSpan={nFixed + snapshots.length} style={{ textAlign: 'right', paddingRight: 12 }}>
+                })}
+
+                {/* Discipline subtotal row.
+                    Label floats near the viewport center (sticky left: ~50%)
+                    so it stays readable no matter how far left/right you scroll.
+                    Total Hrs + Phase CTC are frozen to the right edge. */}
+                <tr className="group-subtotal" style={{ background: 'var(--color-tertiary)', fontWeight: 600, fontSize: 12 }}>
+                  <td
+                    colSpan={nFixed + snapshots.length}
+                    style={{
+                      position: 'sticky',
+                      left: 'calc(50% - 80px)',
+                      zIndex: 2,
+                      background: 'var(--color-tertiary)',
+                      whiteSpace: 'nowrap',
+                      color: 'var(--color-primary)',
+                    }}
+                  >
                     {disc} Total
                   </td>
-                  <td className="num">{discTotalHrs.toFixed(1)}</td>
-                  <td className="num">{fmtCents(discPhaseCTC)}</td>
-                </tr>,
-              ]
-            })}
-          </tbody>
+                  <td
+                    className="num sticky-right sticky-right-shadow"
+                    style={{ right: widths[widths.length - 1], background: 'var(--color-tertiary)', zIndex: 2 }}
+                  >{discTotalHrs.toFixed(1)}</td>
+                  <td
+                    className="num sticky-right"
+                    style={{ right: 0, background: 'var(--color-tertiary)', zIndex: 2 }}
+                  >{fmtCents(discPhaseCTC)}</td>
+                </tr>
+              </tbody>
+            )
+          })}
         </table>
       </div>
       <StageFinancialsTable snapshots={snapshots} resources={resources} financials={financials} />

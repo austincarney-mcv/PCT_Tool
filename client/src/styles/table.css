@@ -119,6 +119,76 @@
 .editable-cell textarea { resize: none; min-height: 48px; }
 .editable-cell.error { outline: 2px solid var(--color-negative); }
 
+/* ── Scrollable wrapper — vertical overflow with sticky rows ── */
+.data-table-wrap--scrollable {
+  overflow-y: auto;
+  max-height: 65vh;
+}
+
+/* ── Frozen first column (stage view) ── */
+
+/* Bump all thead th so they float above sticky-left body cells */
+.data-table--sticky-col thead th {
+  z-index: 2;
+  background: var(--color-primary); /* re-assert so it covers content beneath */
+}
+
+/* Corner cell — sticky on BOTH axes (highest stacking order) */
+/* Slightly lighter than var(--color-primary) so the frozen overlay blends
+   naturally rather than cutting off harshly as you scroll right */
+.data-table--sticky-col thead th:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background: #3d6b52; /* lighter than #2A4735 */
+  box-shadow: 3px 0 10px rgba(0, 0, 0, 0.25), inset -1px 0 0 rgba(255,255,255,0.12);
+}
+
+/* Right-frozen column cells */
+.data-table--sticky-col .sticky-right {
+  position: sticky;
+  z-index: 1;
+  background: var(--color-surface);
+}
+/* Let hover state bleed through on data rows */
+.data-table--sticky-col tbody tr:hover .sticky-right {
+  background: #f9fafb;
+}
+/* Right-sticky inside thead — needs to sit above body sticky cells */
+.data-table--sticky-col thead th.sticky-right {
+  z-index: 4;
+  background: var(--color-primary);
+}
+/* Left-side shadow on the innermost right-sticky column (Total Hrs) */
+.data-table--sticky-col .sticky-right-shadow {
+  box-shadow: -3px 0 8px -2px rgba(42, 71, 53, 0.15);
+}
+
+/* Frozen first column — data rows (not group headers, not subtotals) */
+.data-table--sticky-col tbody tr:not(.group-header):not(.group-subtotal) td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #eef2ef; /* subtle green-tinted off-white — distinct from data cells */
+  border-right: 2px solid #b8cfc0;
+  box-shadow: 3px 0 6px -2px rgba(42, 71, 53, 0.14);
+}
+
+/* Sticky group sub-headers — sit just below the thead (top ≈ thead height) */
+/* Using multiple <tbody> so each sub-header only sticks within its own group */
+/* Both top AND left sticky: the label always starts at the left edge of the
+   viewport regardless of how far the table has scrolled horizontally */
+.data-table--sticky-col tbody tr.group-header td {
+  position: sticky;
+  top: 32px; /* thead row height */
+  left: 0;   /* anchor text to left edge when scrolling right */
+  z-index: 3;
+  background: var(--color-secondary);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.06);
+  white-space: nowrap; /* never wrap — text always fully readable */
+  overflow: visible;   /* never clip */
+}
+
 /* Action column (edit/delete icons) */
 .data-table td.actions {
   width: 60px;
