@@ -493,13 +493,23 @@ function StageView({ data, onToggleLock, onUpdateAllocation }) {
   }, {})
 
   // ── Week colouring based on calendar date ─────────────────────────────────
-  const todayMs = new Date().setHours(0, 0, 0, 0)
+  // "Active Monday" = this week's Monday on Mon–Fri, next Monday on Sat–Sun.
+  // This way a completed work week flips to 'past' over the weekend so the
+  // upcoming Monday column lights up as 'current' ready for the new week.
+  const _today = new Date()
+  _today.setHours(0, 0, 0, 0)
+  const _dow = _today.getDay() // 0=Sun … 6=Sat
+  const _shift = _dow === 0 ? 1 : _dow === 6 ? 2 : 1 - _dow // days to active Monday
+  const _activeMon = new Date(_today)
+  _activeMon.setDate(_activeMon.getDate() + _shift)
+  const activeMonMs  = _activeMon.getTime()
+  const nextMonMs    = activeMonMs + 7 * 24 * 60 * 60 * 1000
+
   const snapStatus = snap => {
-    const start = new Date(snap.snapshot_date + 'T00:00:00').getTime()
-    const end   = start + 7 * 24 * 60 * 60 * 1000
-    if (todayMs < start) return 'future'
-    if (todayMs >= end)  return 'past'
-    return 'current'
+    const ms = new Date((snap.snapshot_date || '') + 'T00:00:00').getTime()
+    if (isNaN(ms)) return 'future'
+    if (ms >= activeMonMs && ms < nextMonMs) return 'current'
+    return ms < activeMonMs ? 'past' : 'future'
   }
   // Header backgrounds (override the primary header colour)
   const WEEK_HEAD_BG = { past: '#1d3027', current: '#d97706', future: undefined }
