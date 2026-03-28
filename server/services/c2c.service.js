@@ -200,7 +200,7 @@ function getStageView(projectId, phase) {
 
   // 1. All snapshots for this project+phase ordered by week_number
   const snapshots = db.prepare(`
-    SELECT id, week_number, week_label, snapshot_locked
+    SELECT id, week_number, week_label, snapshot_locked, snapshot_date
     FROM c2c_snapshots
     WHERE project_id = ? AND phase = ?
     ORDER BY week_number
