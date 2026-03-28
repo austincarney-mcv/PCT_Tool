@@ -122,7 +122,7 @@
 /* ── Scrollable wrapper — vertical overflow with sticky rows ── */
 .data-table-wrap--scrollable {
   overflow-y: auto;
-  max-height: 65vh;
+  max-height: 97vh;
 }
 
 /* ── Frozen first column (stage view) ── */
