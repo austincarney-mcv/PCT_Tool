@@ -579,6 +579,10 @@ function StageView({ data, isAdmin, onAdminUnlock, onAdminRelock, onUpdateAlloca
     acc[disc] = resources.filter(r => r.discipline === disc)
     return acc
   }, {})
+  // Snapshots used for CTC/hours calculations — always excludes past weeks so the
+  // rolling cost figure only reflects remaining (current + future) commitments.
+  const ctcSnaps = snapshots.filter(s => snapStatus(s) !== 'past')
+
   // Header backgrounds (override the primary header colour)
   const WEEK_HEAD_BG = { past: '#6b9e82', current: '#d97706', future: undefined }
   // Body cell styles for past / current / future columns
@@ -685,9 +689,9 @@ function StageView({ data, isAdmin, onAdminUnlock, onAdminRelock, onUpdateAlloca
             if (!group || group.length === 0) return null
 
             const discTotalHrs = group.reduce((sum, res) =>
-              sum + visibleSnaps.reduce((s2, snap) => s2 + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0), 0)
+              sum + ctcSnaps.reduce((s2, snap) => s2 + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0), 0)
             const discPhaseCTC = group.reduce((sum, res) => {
-              const hrs = visibleSnaps.reduce((s2, snap) => s2 + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0)
+              const hrs = ctcSnaps.reduce((s2, snap) => s2 + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0)
               return sum + hrs * res.hourly_rate
             }, 0)
 
@@ -699,7 +703,7 @@ function StageView({ data, isAdmin, onAdminUnlock, onAdminRelock, onUpdateAlloca
                 </tr>
 
                 {group.map(res => {
-                  const totalHours = visibleSnaps.reduce((sum, snap) =>
+                  const totalHours = ctcSnaps.reduce((sum, snap) =>
                     sum + (res.allocation_by_snapshot[snap.id]?.weekly_utilisation ?? 0) * 37.5, 0)
                   const phaseCTC = totalHours * res.hourly_rate
                   return (
