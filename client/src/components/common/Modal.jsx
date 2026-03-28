@@ -16,6 +16,7 @@ export default function Modal({ title, onClose, children, size = 'md' }) {
         background: 'rgba(0,0,0,0.4)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 16,
+        animation: 'modal-backdrop-in 0.15s ease-out',
       }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
@@ -27,6 +28,7 @@ export default function Modal({ title, onClose, children, size = 'md' }) {
         maxHeight: '90vh',
         overflow: 'auto',
         display: 'flex', flexDirection: 'column',
+        animation: 'modal-panel-in 0.15s ease-out',
       }}>
         {/* Header */}
         <div style={{

@@ -11,6 +11,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import ErrorBanner from '../components/common/ErrorBanner'
 import ExportButton from '../components/excel/ExportButton'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
 const DISCIPLINES = ['All','Architecture','Civil','Structural','Hydraulics','Landscaping','Certifier','Fire Engineering','Fire Services','Builder/CM']
 
@@ -85,6 +86,20 @@ export default function DeliverableSchedulePage() {
     return value => updateMut.mutateAsync({ did: row.id, field, value })
   }
 
+  const { data: allDrawings = [] } = useQuery({
+    queryKey: ['drawings', projectId, 'all'],
+    queryFn: () => drawingsApi.list(projectId, null),
+    enabled: !!projectId,
+  })
+
+  const DISC_SHORT = { Architecture: 'Arch', Civil: 'Civil', Structural: 'Struc', Hydraulics: 'Hyd', Landscaping: 'Lscape', Certifier: 'Cert', 'Fire Engineering': 'Fire Eng', 'Fire Services': 'Fire Svc', 'Builder/CM': 'Builder' }
+  const completionChartData = DISCIPLINES.slice(1).map(disc => {
+    const group = allDrawings.filter(d => d.discipline === disc)
+    if (!group.length) return null
+    const avg = group.reduce((s, d) => s + (d.complete_pct || 0), 0) / group.length
+    return { discipline: DISC_SHORT[disc] || disc, pct: Math.round(avg) }
+  }).filter(Boolean)
+
   const columns = [
     { key: 'discipline', header: 'Discipline', width: 110, sortable: true,
       render: row => <EditableCell value={row.discipline} onSave={makeSaver(row, 'discipline')} type="select"
@@ -140,6 +155,26 @@ export default function DeliverableSchedulePage() {
           <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>+ Add Drawing</button>
         </>}
       />
+
+      {completionChartData.length > 0 && (
+        <div className="card" style={{ marginBottom: 16, padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: 8 }}>AVG COMPLETION % BY DISCIPLINE</div>
+          <div style={{ height: Math.max(90, completionChartData.length * 28) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={completionChartData} layout="vertical" margin={{ top: 0, right: 40, left: 0, bottom: 0 }}>
+                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} tickFormatter={v => `${v}%`} />
+                <YAxis type="category" dataKey="discipline" tick={{ fontSize: 11 }} width={52} />
+                <Tooltip formatter={v => `${v}%`} />
+                <Bar dataKey="pct" name="Completion" isAnimationActive radius={[0, 3, 3, 0]}>
+                  {completionChartData.map(d => (
+                    <Cell key={d.discipline} fill={d.pct >= 90 ? '#16a34a' : d.pct >= 70 ? '#d97706' : '#dc2626'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Discipline filter */}
       <div className="tab-strip mb-4" style={{ flexWrap: 'wrap' }}>

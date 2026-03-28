@@ -8,6 +8,7 @@ import FormField from '../components/common/FormField'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import ErrorBanner from '../components/common/ErrorBanner'
 import ExportButton from '../components/excel/ExportButton'
+import C2CTrendChart from '../components/c2c/C2CTrendChart'
 import { useColumnResize } from '../hooks/useColumnResize'
 
 const DISCIPLINES = ['Architecture','Civil','Structural','Hydraulics','Landscaping','Certifier','Fire Engineering','Fire Services','Builder/CM']
@@ -704,6 +705,7 @@ export default function C2CPage() {
   const [showNew, setShowNew] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [stageView, setStageView] = useState(true)
+  const [showTrend, setShowTrend] = useState(false)
 
   const { data: snapshots = [] } = useQuery({
     queryKey: ['c2c-snapshots', projectId],
@@ -815,6 +817,25 @@ export default function C2CPage() {
             {label}
           </button>
         ))}
+      </div>
+
+      {/* ── Collapsible trend chart ── */}
+      <div style={{ marginBottom: 10 }}>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => setShowTrend(v => !v)}
+          style={{ fontSize: 12 }}
+        >
+          {showTrend ? '▲ Hide Trend' : '▼ Show Trend'}
+        </button>
+        {showTrend && (
+          <div className="card" style={{ marginTop: 8, padding: '12px 16px' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+              C2C TREND — {phaseFilter === 'design' ? 'DESIGN DOCUMENTATION' : 'CONSTRUCTION SERVICES'}
+            </div>
+            <C2CTrendChart projectId={projectId} phase={phaseFilter} height={180} />
+          </div>
+        )}
       </div>
 
       {/* ── Row 2: Phase selector — standard tab style, independent of view mode ── */}

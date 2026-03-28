@@ -12,6 +12,7 @@ import StatusBadge from '../components/common/StatusBadge'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import ErrorBanner from '../components/common/ErrorBanner'
 import ExportButton from '../components/excel/ExportButton'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts'
 
 const LIKELIHOODS = ['Almost Certain','Likely','Possible','Unlikely','Very Unlikely']
 const PRIORITIES = ['Low','Med','High']
@@ -89,6 +90,12 @@ export default function RiskIssuePage() {
     enabled: !!projectId,
   })
 
+  const { data: allRisks = [] } = useQuery({
+    queryKey: ['risks', projectId, 'all'],
+    queryFn: () => risksApi.list(projectId),
+    enabled: !!projectId,
+  })
+
   const updateMut = useMutation({
     mutationFn: ({ id, field, value }) => risksApi.update(projectId, id, { [field]: value }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['risks', projectId] }),
@@ -145,6 +152,35 @@ export default function RiskIssuePage() {
           <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>+ Add Risk</button>
         </>}
       />
+      {allRisks.length > 0 && (() => {
+        const chartData = ['Low', 'Med', 'High'].map(priority => {
+          const group = allRisks.filter(r => r.priority === priority)
+          return {
+            priority,
+            Open: group.filter(r => r.status === 'Open').length,
+            Closed: group.filter(r => r.status === 'Closed').length,
+            Monitoring: group.filter(r => r.status === 'Monitoring').length,
+          }
+        }).filter(d => d.Open + d.Closed + d.Monitoring > 0)
+        return (
+          <div className="card" style={{ marginBottom: 16, padding: '12px 16px' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: 8 }}>RISK DISTRIBUTION BY PRIORITY</div>
+            <div style={{ height: 110 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+                  <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <YAxis type="category" dataKey="priority" tick={{ fontSize: 11 }} width={32} />
+                  <Tooltip />
+                  <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="Open" stackId="a" fill="#dc2626" isAnimationActive />
+                  <Bar dataKey="Monitoring" stackId="a" fill="#d97706" isAnimationActive />
+                  <Bar dataKey="Closed" stackId="a" fill="#16a34a" isAnimationActive />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )
+      })()}
       <div className="tab-strip mb-4">
         {['Open', 'Closed', 'Monitoring', ''].map(s => (
           <button key={s || 'all'} className={`tab${statusFilter === s ? ' active' : ''}`}

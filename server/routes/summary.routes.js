@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const auth = require('../middleware/auth');
-const c = require('../controllers/excel.controller');
+const { getSummary } = require('../controllers/summary.controller');
 
-router.get('/export', auth, c.exportProject);
+router.get('/', auth, getSummary);
 
 module.exports = router;

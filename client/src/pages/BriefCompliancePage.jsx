@@ -11,6 +11,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import ErrorBanner from '../components/common/ErrorBanner'
 import ExportButton from '../components/excel/ExportButton'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 const DISCIPLINES = ['Architecture','Civil','Structural','Hydraulics','Landscaping','Certifier','Fire Engineering','Fire Services','Builder/CM']
 
@@ -95,8 +96,26 @@ export default function BriefCompliancePage() {
     return value => updateMut.mutateAsync({ id: row.id, field, value })
   }
 
+  const { data: allItems = [] } = useQuery({
+    queryKey: ['brief-compliance', projectId, 'all'],
+    queryFn: () => briefComplianceApi.list(projectId),
+    enabled: !!projectId,
+  })
+
   const compliantCount = items.filter(i => i.compliant).length
   const deviationCount = items.filter(i => i.deviation).length
+
+  const DISC_SHORT = { Architecture: 'Arch', Civil: 'Civil', Structural: 'Struc', Hydraulics: 'Hyd', Landscaping: 'Lscape', Certifier: 'Cert', 'Fire Engineering': 'Fire Eng', 'Fire Services': 'Fire Svc', 'Builder/CM': 'Builder' }
+  const complianceChartData = DISCIPLINES.map(disc => {
+    const group = allItems.filter(i => i.discipline === disc)
+    if (!group.length) return null
+    return {
+      discipline: DISC_SHORT[disc] || disc,
+      Compliant: group.filter(i => i.compliant).length,
+      Deviation: group.filter(i => i.deviation).length,
+      Unchecked: group.filter(i => !i.compliant && !i.deviation).length,
+    }
+  }).filter(Boolean)
 
   const columns = [
     { key: 'spec_number', header: 'Spec #', width: 70,
@@ -146,6 +165,24 @@ export default function BriefCompliancePage() {
           <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>+ Add Item</button>
         </>}
       />
+      {complianceChartData.length > 0 && (
+        <div className="card" style={{ marginBottom: 16, padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: 8 }}>COMPLIANCE BY DISCIPLINE</div>
+          <div style={{ height: Math.max(90, complianceChartData.length * 30) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={complianceChartData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+                <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                <YAxis type="category" dataKey="discipline" tick={{ fontSize: 11 }} width={52} />
+                <Tooltip />
+                <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="Compliant" stackId="a" fill="#16a34a" isAnimationActive />
+                <Bar dataKey="Deviation" stackId="a" fill="#dc2626" isAnimationActive />
+                <Bar dataKey="Unchecked" stackId="a" fill="#d1d5db" isAnimationActive />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
       <div className="tab-strip mb-4" style={{ flexWrap: 'wrap' }}>
         {['All', ...DISCIPLINES].map(d => (
           <button key={d} className={`tab${discipline === d ? ' active' : ''}`}

@@ -11,6 +11,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import ErrorBanner from '../components/common/ErrorBanner'
 import ExportButton from '../components/excel/ExportButton'
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 const STATUS_OPTIONS = ['','In Progress','Approved','Pending','Not Required','Lodged','Issued']
 
@@ -91,6 +92,14 @@ export default function ApprovalsPage() {
     return value => updateMut.mutateAsync({ id: row.id, field, value })
   }
 
+  const STATUS_COLORS = { 'In Progress': '#2A4735', Approved: '#16a34a', Pending: '#d97706', 'Not Required': '#9ca3af', Lodged: '#3b82f6', Issued: '#8b5cf6', '': '#d1d5db' }
+  const statusCounts = STATUS_OPTIONS.slice(1).map(s => ({
+    name: s,
+    value: items.filter(i => i.current_status === s).length,
+  })).filter(d => d.value > 0)
+  const unknownCount = items.filter(i => !i.current_status).length
+  if (unknownCount > 0) statusCounts.push({ name: 'Unknown', value: unknownCount })
+
   const columns = [
     { key: 'item_number', header: '#', width: 50,
       render: row => <EditableCell value={row.item_number} onSave={save(row, 'item_number')} /> },
@@ -140,6 +149,26 @@ export default function ApprovalsPage() {
           <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>+ Add Item</button>
         </>}
       />
+      {statusCounts.length > 0 && (
+        <div className="card" style={{ marginBottom: 16, padding: '12px 16px', display: 'flex', gap: 16, alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: 4 }}>STATUS BREAKDOWN</div>
+            <div style={{ height: 140, width: 140 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={statusCounts} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={35} outerRadius={60} isAnimationActive>
+                    {statusCounts.map(d => (
+                      <Cell key={d.name} fill={STATUS_COLORS[d.name] || '#9ca3af'} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
       <DataTable
         columns={columns}
         rows={items}

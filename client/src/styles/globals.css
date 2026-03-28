@@ -114,6 +114,65 @@ button {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ─── Modal animations ──────────────────────────────────────────────────────── */
+@keyframes modal-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes modal-panel-in {
+  from { opacity: 0; transform: scale(0.97) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+
+/* ─── Skeleton shimmer ──────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  from { background-position: -600px 0; }
+  to   { background-position:  600px 0; }
+}
+.skeleton-line {
+  height: 12px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, #e8e8e8 25%, #f5f5f5 50%, #e8e8e8 75%);
+  background-size: 1200px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-row td { padding: 8px !important; }
+.skeleton-row .skeleton-line { height: 11px; }
+
+/* ─── New-row highlight ─────────────────────────────────────────────────────── */
+@keyframes row-enter {
+  0%   { background: #d1fae5; }
+  100% { background: transparent; }
+}
+.row-new { animation: row-enter 1.4s ease-out forwards; }
+
+/* ─── Toast notifications ───────────────────────────────────────────────────── */
+@keyframes toast-in  { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes toast-out { from { opacity: 1; transform: translateY(0); }    to { opacity: 0; transform: translateY(10px); } }
+
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+.toast {
+  background: var(--color-primary);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  box-shadow: var(--shadow-md);
+  animation: toast-in 0.2s ease-out;
+  white-space: nowrap;
+}
+.toast.toast-exit { animation: toast-out 0.25s ease-in forwards; }
+
 .error-banner {
   background: #fef2f2;
   border: 1px solid #fca5a5;

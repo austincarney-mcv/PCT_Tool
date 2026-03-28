@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import { ProjectProvider } from './context/ProjectContext'
 import AppShell from './components/layout/AppShell'
+import Toast from './components/common/Toast'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import DeliverableSchedulePage from './pages/DeliverableSchedulePage'
@@ -15,6 +16,7 @@ import SiDPage from './pages/SiDPage'
 import RiskIssuePage from './pages/RiskIssuePage'
 import ValueLogPage from './pages/ValueLogPage'
 import LessonsLearntPage from './pages/LessonsLearntPage'
+import TeamResourcesPage from './pages/TeamResourcesPage'
 
 function RequireAuth({ children }) {
   const { isAuthenticated } = useAuth()
@@ -25,6 +27,7 @@ function RequireAuth({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <Toast />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={
@@ -46,6 +49,7 @@ export default function App() {
           <Route path="risks" element={<RiskIssuePage />} />
           <Route path="value-log" element={<ValueLogPage />} />
           <Route path="lessons" element={<LessonsLearntPage />} />
+          <Route path="team" element={<TeamResourcesPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -1,14 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { projectsApi } from '../api/projects.api'
-import { c2cApi } from '../api/c2c.api'
 import { useProject } from '../context/ProjectContext'
 import PageHeader from '../components/layout/PageHeader'
 import Modal from '../components/common/Modal'
 import FormField from '../components/common/FormField'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import ErrorBanner from '../components/common/ErrorBanner'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import C2CTrendChart from '../components/c2c/C2CTrendChart'
 
 function NewProjectModal({ onClose }) {
   const qc = useQueryClient()
@@ -70,32 +69,37 @@ function NewProjectModal({ onClose }) {
   )
 }
 
-function C2CTrendChart({ projectId }) {
-  const { data = [] } = useQuery({
-    queryKey: ['c2c-trend', projectId],
-    queryFn: () => c2cApi.trend(projectId),
+
+function KpiCards({ projectId }) {
+  const { data: s } = useQuery({
+    queryKey: ['project-summary', projectId],
+    queryFn: () => projectsApi.summary(projectId),
     enabled: !!projectId,
   })
-  if (!data.length) return <div className="empty-state">No C2C snapshot data yet.</div>
-  const chartData = data.filter(d => d.phase === 'design').map(d => ({
-    name: `W${d.week_number}`,
-    'Under/Over': d.total_under_over ? Math.round(d.total_under_over) : 0,
-    'CTC': d.total_ctc ? Math.round(d.total_ctc) : 0,
-  }))
-  if (!chartData.length) return null
+  if (!s) return null
+
+  const cards = [
+    { label: 'Open Risks',          value: s.open_risks,                   alert: s.open_risks > 0 },
+    { label: 'Open Critical Items', value: s.open_critical_items,          alert: s.open_critical_items > 0 },
+    { label: 'Pending Approvals',   value: s.pending_approvals,            alert: s.pending_approvals > 0, amber: true },
+    { label: 'Open RFIs',           value: s.open_rfis,                    alert: false },
+    { label: 'Unsubmitted Changes', value: s.unsubmitted_design_changes,   alert: s.unsubmitted_design_changes > 0, amber: true },
+    { label: 'Total Value',         value: `$${Number(s.total_value).toLocaleString('en-AU', { maximumFractionDigits: 0 })}`, alert: false, green: true },
+  ]
+
   return (
-    <div style={{ height: 200 }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} />
-          <Tooltip formatter={v => `$${v.toLocaleString()}`} />
-          <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
-          <Line type="monotone" dataKey="Under/Over" stroke="#2A4735" strokeWidth={2} dot={{ r: 3 }} />
-          <Line type="monotone" dataKey="CTC" stroke="#CEDDC3" strokeWidth={2} dot={{ r: 3 }} strokeDasharray="4 2" />
-        </LineChart>
-      </ResponsiveContainer>
+    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
+      {cards.map(c => (
+        <div key={c.label} className="card" style={{
+          flex: '1 1 140px', minWidth: 120, padding: '10px 14px',
+          borderLeft: `3px solid ${c.green ? '#16a34a' : c.alert ? (c.amber ? '#d97706' : '#dc2626') : 'var(--color-border)'}`,
+        }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: c.green ? '#16a34a' : c.alert ? (c.amber ? '#d97706' : '#dc2626') : 'var(--color-text)' }}>
+            {c.value}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>{c.label}</div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -127,6 +131,8 @@ export default function DashboardPage() {
           <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}>+ New Project</button>
         }
       />
+
+      {projectId && <KpiCards projectId={projectId} />}
 
       {projects.length === 0 ? (
         <div className="empty-state card" style={{ padding: 40 }}>

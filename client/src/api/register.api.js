@@ -27,7 +27,4 @@ export const designChangeFeeSummary = pid   => api.get(`/projects/${pid}/design-
 
 export const excelApi = {
   exportUrl: pid => `/api/projects/${pid}/export`,
-  import:    (pid, formData) => api.post(`/projects/${pid}/import`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  }).then(r => r.data),
 }

@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { path: '/sid',           label: 'SiD Register',       icon: '⛨' },
   { path: '/value-log',     label: 'Value Log',          icon: '◈' },
   { path: '/lessons',       label: 'Lessons Learnt',     icon: '✎' },
+  { path: '/team',          label: 'Team Resources',     icon: '◉' },
 ]
 
 export default function Sidebar() {

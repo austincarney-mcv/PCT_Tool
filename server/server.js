@@ -43,6 +43,7 @@ app.use('/api/projects/:id/lessons',          require('./routes/lessons.routes')
 app.use('/api/projects/:id/sid',              require('./routes/sid.routes'));
 app.use('/api/projects/:id/value-log',        require('./routes/valueLog.routes'));
 app.use('/api/projects/:id/brief-compliance', require('./routes/briefCompliance.routes'));
+app.use('/api/projects/:id/summary',          require('./routes/summary.routes'));
 app.use('/api/projects/:id',                  require('./routes/excel.routes'));
 
 // ─── Error handler ────────────────────────────────────────────────────────────

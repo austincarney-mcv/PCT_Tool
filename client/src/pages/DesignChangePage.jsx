@@ -12,6 +12,7 @@ import StatusBadge from '../components/common/StatusBadge'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import ErrorBanner from '../components/common/ErrorBanner'
 import ExportButton from '../components/excel/ExportButton'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 const DISCIPLINES = ['Architecture','Civil','Structural','Hydraulics','Landscaping','Certifier','Fire Engineering','Fire Services','Builder/CM']
 const CHANGE_TYPES = ['Design Change','Design Development','Variation']
@@ -105,7 +106,25 @@ export default function DesignChangePage() {
     return value => updateMut.mutateAsync({ id: row.id, field, value })
   }
 
+  const { data: allItems = [] } = useQuery({
+    queryKey: ['design-changes', projectId, 'all'],
+    queryFn: () => designChangesApi.list(projectId),
+    enabled: !!projectId,
+  })
+
   const totalFees = FEE_FIELDS.reduce((sum, f) => sum + items.reduce((s, i) => s + (i[f] || 0), 0), 0)
+
+  // Chart: fee impact per discipline, stacked by change_type
+  const DISC_SHORT = { Architecture: 'Arch', Civil: 'Civil', Structural: 'Struc', Hydraulics: 'Hyd', Landscaping: 'Lscape', Certifier: 'Cert', 'Fire Engineering': 'Fire Eng', 'Fire Services': 'Fire Svc', 'Builder/CM': 'Builder' }
+  const DISC_FEE = { Architecture: 'arch_fees', Civil: 'civil_fees', Structural: 'struc_fees', Hydraulics: 'hyd_fees', Landscaping: 'lscape_fees', Certifier: 'certifier_fees', 'Fire Engineering': 'fire_eng_fees', 'Fire Services': 'fire_services_fees', 'Builder/CM': 'builder_dm_fees' }
+  const feeChartData = DISCIPLINES.map(disc => {
+    const row = { discipline: DISC_SHORT[disc] || disc }
+    CHANGE_TYPES.forEach(ct => {
+      const feeField = DISC_FEE[disc]
+      row[ct] = allItems.filter(i => i.discipline === disc && i.change_type === ct).reduce((s, i) => s + (i[feeField] || 0), 0)
+    })
+    return row
+  }).filter(r => CHANGE_TYPES.some(ct => r[ct] !== 0))
 
   const columns = [
     { key: 'item_number', header: '#', width: 45,
@@ -153,6 +172,24 @@ export default function DesignChangePage() {
           <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>+ Add Change</button>
         </>}
       />
+      {feeChartData.length > 0 && (
+        <div className="card" style={{ marginBottom: 16, padding: '12px 16px' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: 8 }}>FEE IMPACT BY DISCIPLINE</div>
+          <div style={{ height: Math.max(90, feeChartData.length * 30) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={feeChartData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+                <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={v => v === 0 ? '0' : `$${(v/1000).toFixed(0)}k`} />
+                <YAxis type="category" dataKey="discipline" tick={{ fontSize: 11 }} width={52} />
+                <Tooltip formatter={v => `$${Number(v).toLocaleString('en-AU', { maximumFractionDigits: 0 })}`} />
+                <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="Design Change" stackId="a" fill="#2A4735" isAnimationActive />
+                <Bar dataKey="Design Development" stackId="a" fill="#CEDDC3" isAnimationActive />
+                <Bar dataKey="Variation" stackId="a" fill="#d97706" isAnimationActive />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
       <div className="tab-strip mb-4">
         {[['', 'All'], ...CHANGE_TYPES.map(t => [t, t])].map(([val, label]) => (
           <button key={val || 'all'} className={`tab${typeFilter === val ? ' active' : ''}`}
