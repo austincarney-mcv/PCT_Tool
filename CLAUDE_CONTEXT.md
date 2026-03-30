@@ -1,324 +1,248 @@
 # Project Control Tool (PCT) — Claude Code Context Document
 
-## Overview
-
-This project is a **web application** (or desktop tool) that digitises and modernises an existing Excel-based Project Control Tool used by an architectural/engineering consultancy. The source file is:
-
-```
-C:\Users\austin.carney\Projects\014_PCT_App\10162 - Project Control Tool.xlsx
-```
-
-The Excel workbook was built to manage a single construction project (Project 10162 — Lot 31, The Hub, Heathwood, for client Prekaro Projects). The app should generalise this into a **multi-project platform** that replicates all the functionality of the Excel tool in a more usable, scalable form.
+## Status
+**In active development.** The app is functional but may contain bugs, incomplete features, or placeholder data. Do not assume any module is fully production-ready without verifying. The source Excel file (`10162 - Project Control Tool.xlsx`) has been deleted — it is no longer relevant. All data is now seeded directly into SQLite.
 
 ---
 
-## Source Excel File Structure
+## What This App Is
 
-The workbook contains **32 sheets**. They fall into the following functional groups:
+A multi-project web platform for architectural/engineering consultancies to manage construction projects. It digitises an Excel-based project control tool previously used for a single project (Project 10162 — Lot 31, The Hub, Heathwood, client Prekaro Projects).
 
-### 1. Project Identity Sheets
-| Sheet | Purpose |
-|-------|---------|
-| `Cover Sheet` | Project metadata: name, number, client, author, version, date |
-
-### 2. Deliverables Schedule
-| Sheet | Purpose |
-|-------|---------|
-| `Deliverables Schedule` | Master drawing register. Lists every drawing by number, title, and scale across disciplines (Architecture, Civil, Structural, etc.). Tracks 5 planned issue rounds with dates and % complete milestones (60%, 70%, 80%, 90%, 100%). Columns include: Drawing Number, Drawing Title, Scale, Issue No., Issue Date, Primary Purpose, Procurement flag, IFC flag, Complete %, Residual % |
-
-### 3. Cost to Complete (C2C) — Design Phase
-These sheets track **weekly fee burn and remaining cost to complete** during the design documentation phase (Sept–Nov 2025).
-
-| Sheet | Purpose |
-|-------|---------|
-| `Cost to Complete - Start` | Baseline/Week 1 snapshot |
-| `C2C Week 2` through `C2C Week 12` | Weekly snapshots (weeks 2, 3, 4, 5, 6, 9, 10, 11, 12) |
-
-**Each C2C sheet contains:**
-- Project header (number, name, client)
-- Issue schedule header: Issue No., % Complete, Issue Date, Primary Purpose, Procurement milestones, IFC milestones
-- **Team Resourcing table** broken down by discipline (Architecture, Civil, Structural, Hydraulics, Landscaping, etc.):
-  - Resource name (e.g. Michael McVeigh, Sonya Butt, Elliot Blucher)
-  - Hourly rate (e.g. $488, $244, $284)
-  - Weekly utilisation fraction (0.0 to 1.0, where 1.0 = full week)
-  - Auto-calculated: Total Hours remaining, Cost to Complete
-- **Financial summary** per discipline:
-  - Agreed Fee
-  - Cost at Close (actual spent to date)
-  - Net to Carry (fee surplus/deficit from previous phases)
-  - Construction Documentation Cost to Complete (sum of remaining resource costs)
-  - Synergy Net Residual (fee balance)
-  - Total Net to Carry
-  - Adjusted Net Residual
-  - Under/Over (variance)
-
-### 4. Cost to Complete (C2C) — Construction Services Phase
-| Sheet | Purpose |
-|-------|---------|
-| `CS C2C Week 1` through `CS C2C Week 12` | Same structure as design C2C but for the construction administration phase (Dec 2026–May 2027, W1–W21) |
-
-These sheets are largely unpopulated (template stage), indicating the construction phase had not yet begun at the time of the file snapshot.
-
-### 5. Approvals Tracker
-| Sheet | Purpose |
-|-------|---------|
-| `Approvals Tracker` | Tracks all statutory approvals required under Queensland legislation |
-
-**Columns:** Item No., Description, Governing Legislation & Relevant Act, Authority, Application ID, Current Status, Date Application Lodged, Date Application Paid, Date Application Properly Made, RFI Date, RFI Response, Expected, Next Step, By Who, When, Complete
-
-**Approval categories tracked:**
-1. Development Approval (Planning Act)
-2. Operational Works — Earthworks, Stormwater
-3. Building Approval — QFES, QLEAVE, Building Approval, Build Over Sewer/Stormwater, Certificate of Occupancy
-4. Plumbing Approval
-5. UU/UW Water & Sewer Connections (Unity Water)
-6. NBN
-7. Telstra
-
-### 6. Critical Items Register
-| Sheet | Purpose |
-|-------|---------|
-| `Critical Items Register` | Action log for unresolved or high-priority design/coordination issues |
-
-**Columns:** Item No., Details, Agreed Strategy Moving Forward, Action Step, Action Item Person Responsible, Action Item Date, Date Issue Raised, Date Issue Resolution Required, Date Resolved, Status (OPEN/CLOSED), Deliverable Issue Affected
-
-Items are grouped by initiator: Prekaro Projects Critical Issues, Architectural Critical Issues, etc.
-
-### 7. Brief Compliance Register
-| Sheet | Purpose |
-|-------|---------|
-| `Brief Compliance Register` | Checks each item from the original client design brief against actual design decisions |
-
-**Columns:** Spec No., Location, Clause, Brief Item, Discipline, Compliant (Y/blank), Deviation (Y/blank), Comments, Client Response, McVeigh Counter Response
-
-Items are sourced from named brief documents (e.g. "Design Meeting 10.09.2025 - email from Robert Walsh").
-
-### 8. Design Change Register
-| Sheet | Purpose |
-|-------|---------|
-| `Design Change Register` | Logs all changes to the design after the original brief was set |
-
-**Columns:** Item #, Date Requested, Type of Change (Design Change / Design Development / Variation), Change Initiator (Name), Discipline, Design Change Details, Reason for Change, Area/Location, Document Reference, Variation Reference, Status (Approved/Submitted/Rejected/Yet to be submitted), Client Cost Impact?, Project Risk Assessment Change?, Client/Design Comments & Acceptance/Approval, Fee Impact columns: Arch Fees, Struc Fees, Civil Fees, Hyd Fees, Certifier Fees, L'scape Fees, Fire Eng Fees, Fire Services, McNab DM
-
-Items grouped into: Prekaro Design Changes, Design Team Design Changes, Client Design Changes.
-
-### 9. Risk & Issue Register
-| Sheet | Purpose |
-|-------|---------|
-| `Risk & Issue Register` | Structured project risk log |
-
-**Columns:** Issue ID, Issue Type (RFC/OS/P), Date Raised, Raised By, Issue Report Author, Description, Priority, Severity, Risk Likelihood, Status, Date of Last Update, Closure Date
-
-Mostly template/unpopulated — ready for use.
-
-### 10. RFIs (Requests for Information)
-| Sheet | Purpose |
-|-------|---------|
-| `RFIs` | Tracks contractor RFIs during construction |
-
-**Columns:** RFI No., Description, Date Received, Client Deadline, Current Outstanding Action, Status, Closed Date, EOT Ref, VAR Ref
-
-### 11. Lessons Learnt
-| Sheet | Purpose |
-|-------|---------|
-| `Lessons Learnt` | Documents design/project issues for future quality improvement |
-
-**Columns:** Item, Client Ref, Details of the Event, Effect (time/cost/design/reputation), Causes/Trigger, Early Warnings?, Previously Identified?, Future Recommendation, Action Step Ref, Action Step Details, Logged By, Logged Date, Priority, Status, Person Responsible (follow-up)
-
-One entry exists: Fire rating issue for structural steel (Type A construction requirement identified late).
-
-### 12. SiD Register (Safety in Design)
-| Sheet | Purpose |
-|-------|---------|
-| `SiD Register` | WHS design-phase hazard register — required under Australian safety law |
-
-**Columns:** Ref #, Element/Activity, Hazard, Potential Harm, Likelihood, Outcome, Risk Rating, Action Required, Action By, Status, Architect Notes/DWG & Doc Ref
-
-Hazard categories: Site (Ground Conditions, Existing Services, Flooding, etc.), Structure, Materials, Mechanical/Electrical, etc.
-
-Risk ratings calculated from a 5×5 matrix (Likelihood × Consequence):
-- Likelihood: Almost Certain / Likely / Possible / Unlikely / Very Unlikely
-- Outcome: Catastrophic / Major / Moderate / Minor / Insignificant
-- Rating: Extreme / Significant / Moderate / Low / Negligible
-
-### 13. Value Log
-| Sheet | Purpose |
-|-------|---------|
-| `Value Log` | Captures value-engineering opportunities and savings communicated to the client |
-
-**Columns:** File, Job, Item, Description, Date, Who, Team, Value ($), When Communicated to Client, How, Approved
-
-### 14. Reference Sheets
-| Sheet | Purpose |
-|-------|---------|
-| `Risk_Matrix - reference only` | 5×5 risk matrix used by SiD and Risk registers |
-| `TEMPCIVIL` | Staging area for civil drawing register — lists civil drawings by number and title |
+The app is used by a **small internal team** (architects and engineers). UX priority is speed of data entry over complexity.
 
 ---
 
-## Key Data Entities
+## Tech Stack
 
-When building the app, these are the core data models to implement:
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19 + Vite, JSX (no TypeScript), Tailwind-style CSS via CSS variables |
+| Backend | Node.js / Express 4 |
+| Database | SQLite via `better-sqlite3` |
+| Auth | JWT (flat-file users via `.env`, no users table in DB) |
+| Data fetching | TanStack React Query v5 |
+| Charts | Recharts |
+| HTTP client | Axios |
 
-### Project
-```
-id, project_number, project_name, client, author, date_created, version, release_status
-```
+### Ports
+- API server: `http://localhost:3002`
+- Vite dev client: `http://localhost:5175`
 
-### Drawing (Deliverable)
-```
-id, project_id, discipline, series, drawing_number, drawing_title, scale,
-issue_1_date, issue_2_date, issue_3_date, issue_4_date, issue_5_date,
-complete_pct, residual_pct, primary_purpose, procurement_flag, ifc_flag
-```
+### Start / Stop
+- `start_server.bat` — launches both processes (project root)
+- `stop_server.bat` — kills both ports (project root)
 
-### Team Resource
-```
-id, project_id, name, discipline, hourly_rate
-```
+---
 
-### C2C Snapshot (weekly fee tracking)
-```
-id, project_id, phase (design|construction), week_number, snapshot_date,
-resource_id, weekly_utilisation (0.0-1.0), remaining_hours, cost_to_complete,
-agreed_fee, cost_at_close, net_to_carry, synergy_net_residual, adjusted_net_residual, under_over
-```
+## Directory Structure
 
-### Approval
 ```
-id, project_id, item_number, description, legislation, authority, application_id,
-current_status, date_lodged, date_paid, date_properly_made,
-rfi_date, rfi_response, expected_date, next_step, responsible_person, due_date, complete
-```
-
-### Critical Item
-```
-id, project_id, item_number, details, agreed_strategy, action_step,
-responsible_person, action_date, date_raised, resolution_required_date,
-date_resolved, status (OPEN|CLOSED), deliverable_affected
-```
-
-### Design Change
-```
-id, project_id, item_number, date_requested, change_type (Design Change|Design Development|Variation),
-initiator_name, discipline, change_details, reason, area_location, document_reference,
-variation_reference, status (Approved|Submitted|Rejected|Pending),
-client_cost_impact (bool), risk_assessment_change (bool), client_comments,
-arch_fees, struc_fees, civil_fees, hyd_fees, certifier_fees, lscape_fees,
-fire_eng_fees, fire_services_fees, builder_dm_fees
-```
-
-### Risk / Issue
-```
-id, project_id, issue_id, issue_type, date_raised, raised_by, author,
-description, priority (Low|Med|High), severity, risk_likelihood, status, 
-last_updated, closure_date
-```
-
-### RFI
-```
-id, project_id, rfi_number, description, date_received, client_deadline,
-outstanding_action, status, closed_date, eot_ref, var_ref
-```
-
-### Lesson Learnt
-```
-id, project_id, item_number, event_details, effect, cause, early_warnings,
-previously_identified, future_recommendation, action_step_ref, action_details,
-logged_by, logged_date, priority, status, responsible_person
-```
-
-### SiD Hazard
-```
-id, project_id, ref_number, element_activity, hazard, potential_harm,
-likelihood, outcome, risk_rating, action_required, action_by, status, architect_notes
-```
-
-### Value Log Entry
-```
-id, project_id, file_ref, job_ref, item_number, description, date,
-who, team, value_amount, communicated_date, communicated_how, approved (bool)
-```
-
-### Brief Compliance Item
-```
-id, project_id, spec_number, location, clause, brief_item, discipline,
-compliant (bool), deviation (bool), comments, client_response, counter_response
+014_PCT_App/
+├── client/              React + Vite frontend
+│   └── src/
+│       ├── api/         Axios API wrappers (one file per domain)
+│       ├── components/  Shared + feature-specific components
+│       ├── context/     AuthContext, ProjectContext
+│       ├── hooks/       useColumnResize
+│       ├── pages/       One page component per module
+│       └── App.jsx      Router + auth guard
+├── server/              Node/Express backend
+│   ├── config/          database.js, constants.js
+│   ├── controllers/     One controller per domain
+│   ├── db/              schema.sql, migrate.js
+│   ├── middleware/       auth.js (JWT verify + requireAdmin), errorHandler.js
+│   ├── routes/          One router per domain
+│   ├── services/        c2c.service.js, excel.export.js
+│   └── utils/           jwt.js, dateUtils.js
+├── data/                pct.db (SQLite), server.log
+├── scripts/             seed_demo.py
+├── deploy/              start-server.bat (production/logging variant)
+├── CLAUDE_CONTEXT.md    This file
+└── README.txt           End-user guide
 ```
 
 ---
 
-## Business Logic Notes
+## Authentication
 
-### C2C Cost Calculation
-- Each resource has a fixed hourly rate
-- Weekly utilisation is a fraction of a standard week (assumed 37.5 hrs)
-- Hours = utilisation × 37.5 × remaining_weeks
-- Cost to Complete = sum(hours × rate) per resource per discipline
-- Adjusted Net Residual = Synergy Net Residual − Total Net to Carry
-- Under/Over = Adjusted Net Residual − Cost to Complete
+Users are defined in `server/.env` as `APP_USERS=username:password:role,...`. There is **no users table** in the database.
 
-### Issue Milestones
-5 planned drawing issue rounds:
-- Issue 1: 60% complete — Design Development
-- Issue 2: 70% complete — Coordination
-- Issue 3: 80% complete — BA & Coordination / Structural & Civil Procurement
-- Issue 4: 90% complete — Final Coordination / Fitout Procurement / Struc & Civil IFC
-- Issue 5: 100% complete — Final IFC (Issued for Construction)
+Current dev credentials (from `.env`):
+- `superadmin` / `ultima` — role: `admin`
+- `viewer` / `viewer123` — role: `viewer`
 
-### Disciplines Tracked
-Architecture, Civil, Structural, Hydraulics, Landscaping, Certifier, Fire Engineering, Fire Services, Builder/Construction Manager
+Roles:
+- **admin** — can unlock past C2C weeks via a 24-hour override
+- **viewer** — read-only implied; all authenticated users can write except admin-gated routes
 
-### Queensland Regulatory Context
-This tool is designed for Queensland, Australia construction projects. Approvals reference:
+JWT expiry: 8 hours. Refresh endpoint available at `/api/auth/refresh`.
+
+---
+
+## Database
+
+**File:** `data/pct.db`
+**Schema:** `server/db/schema.sql`
+**Migration:** runs on every server start via `migrate()` in `server.js` — uses `CREATE TABLE IF NOT EXISTS` so it is safe to re-run. Incremental column additions are handled via a try/catch `ALTER TABLE` list in `migrate.js`.
+
+### Tables
+
+| Table | Purpose |
+|-------|---------|
+| `projects` | Project metadata |
+| `team_resources` | Team members with hourly rates, per project |
+| `drawings` | Deliverables / drawing register |
+| `c2c_snapshots` | Weekly C2C snapshot headers (one row per week per phase) |
+| `c2c_resource_allocations` | Utilisation fractions per resource per snapshot |
+| `c2c_discipline_financials` | Fee summary per discipline per snapshot |
+| `approvals` | Statutory approvals tracker |
+| `critical_items` | Critical items register |
+| `design_changes` | Design change register |
+| `risks` | Risk & issue register |
+| `rfis` | RFI log |
+| `lessons_learnt` | Lessons learnt register |
+| `sid_hazards` | Safety in Design hazard register |
+| `value_log` | Value engineering log |
+| `brief_compliance` | Brief compliance checklist |
+
+### Known Schema TODOs (from inline comments)
+- `c2c_discipline_financials.synergy_net_residual` — hidden in the CS phase view but preserved in the DB. May be swapped with `fee_less_wip` or merged when an external finance/billing DB integration is scoped.
+- `c2c_discipline_financials.fee_less_wip` — placeholder default of `$1,000` per discipline. Needs connection to an external finance/billing system once that integration is scoped.
+
+---
+
+## Sample Data
+
+Seeded via `scripts/seed_demo.py`. **Two projects** in the live DB:
+
+| ID | Project Number | Name | Client |
+|----|---------------|------|--------|
+| 1 | 00000001 | Functional Test | Demo Client |
+| 6 | 00010162 | Lot 31 The Hub Heathwood | Prekaro Projects |
+
+Project 6 (10162) is the primary demo project with full data across all modules. Project 1 is a minimal functional test project.
+
+### C2C Sample Data — Project 6
+
+**Design phase** (weeks sorted by week_number, all dates past):
+
+| Week | Date |
+|------|------|
+| W1–W12 | 2025-09-08 → 2025-11-24 (W7, W8 missing — not in source) |
+
+**Construction Services phase** (all dates corrected to be past/current/future relative to today):
+
+| Weeks | Date range | Status |
+|-------|-----------|--------|
+| W1–W12 | 2025-12-08 → 2026-03-09 | Past |
+| W13 | 2026-03-23 | Past |
+| W14 | 2026-03-30 | Current |
+| W15–W20 | 2026-04-06 → 2026-05-11 | Future |
+
+> **Note:** CS W1–W12 were originally seeded with 2026/2027 dates (from the Excel planning dates). They were corrected on 2026-03-30 to 2025/2026 dates so they are consistently classified as "past" by the hide/show logic.
+
+---
+
+## C2C Module — Key Behaviours
+
+This is the most complex module. Understand these behaviours before modifying it.
+
+### Week Status Classification
+Both client and server independently calculate week status from `snapshot_date`:
+- `snapshot_date < activeMon` → **past** (locked, excluded from CTC calc)
+- `snapshot_date` within current Mon–Sun → **current** (unlocked, included in CTC)
+- `snapshot_date > current week` → **future** (unlocked, included in CTC)
+
+"Active Monday" on weekdays = this week's Monday. On Saturday/Sunday = next Monday.
+
+### CTC Calculation
+- `hours = weekly_utilisation × 37.5 × remaining_weeks`
+- `cost_to_complete = sum(hours × hourly_rate)` per resource
+- Only **current and future** weeks feed into CTC — past weeks are excluded
+- `adjusted_net_residual = synergy_net_residual − total_net_to_carry` (STORED generated column)
+- `under_over = adjusted_net_residual − construction_doc_cost_to_complete` (STORED generated column)
+
+### Locking
+- Past weeks are **auto-locked** by the server on every `getStageView` call
+- Current/future weeks are **auto-unlocked** by the same call
+- Admins can unlock a past week for 24 hours via `admin_unlocked_until` field
+- Lock state is enforced server-side before any allocation/financial update
+
+### Stage View vs Week View
+- **Stage View** — horizontal spreadsheet with all weeks as columns; one row per team member. This is the primary view. Has a hide/show past weeks toggle and a colour-coded legend.
+- **Week View** — one snapshot at a time, selected from a pill list. Shows allocations + financials for that snapshot.
+
+### Column Colour Coding (Stage View)
+| Status | Header colour | Body colour |
+|--------|--------------|-------------|
+| Past | `#6b9e82` (green) | `#f0f4f1` (muted green-white) |
+| Current | `#d97706` (amber) | `rgba(217,119,6,0.07)` (amber tint) |
+| Future | `var(--color-primary)` | default |
+
+---
+
+## Frontend Architecture Notes
+
+- **ProjectContext** — holds the selected project ID globally. All pages read `useProject()` to get `projectId`. No project selected = empty state shown.
+- **AuthContext** — holds JWT token, user object, `isAuthenticated`, `isAdmin`. Persists token to localStorage.
+- All API calls route through `client/src/api/client.js` (Axios instance with base URL + auth header interceptor).
+- Pages are flat — no nested routing beyond the top-level module routes.
+- Column resizing in tables uses the shared `useColumnResize` hook (drag-to-resize table headers).
+- `EditableCell` component is used for inline editing across multiple modules.
+
+---
+
+## API Routes
+
+All routes require Bearer JWT. Base: `/api/`
+
+| Prefix | Module |
+|--------|--------|
+| `/api/auth` | Login, refresh |
+| `/api/projects` | Project CRUD |
+| `/api/projects/:id/drawings` | Deliverables schedule |
+| `/api/projects/:id/resources` | Team resources |
+| `/api/projects/:id/c2c` | C2C snapshots, allocations, financials, stage-view, trend |
+| `/api/projects/:id/approvals` | Approvals tracker |
+| `/api/projects/:id/critical-items` | Critical items register |
+| `/api/projects/:id/design-changes` | Design change register |
+| `/api/projects/:id/risks` | Risk & issue register |
+| `/api/projects/:id/rfis` | RFI log |
+| `/api/projects/:id/lessons` | Lessons learnt |
+| `/api/projects/:id/sid` | SiD hazard register |
+| `/api/projects/:id/value-log` | Value log |
+| `/api/projects/:id/brief-compliance` | Brief compliance |
+| `/api/projects/:id/summary` | Project summary (dashboard data) |
+| `/api/health` | Health check (no auth) |
+
+---
+
+## Disciplines (shared constant — server + client must stay in sync)
+
+`Architecture`, `Civil`, `Structural`, `Hydraulics`, `Landscaping`, `Certifier`, `Fire Engineering`, `Fire Services`, `Builder/CM`
+
+Defined in `server/config/constants.js` and mirrored in `C2CPage.jsx`.
+
+---
+
+## Regulatory Context
+
+Queensland, Australia construction projects:
 - Planning Act (Development Approval)
-- Building Act / Building Regulation / National Construction Code / Queensland Development Code
+- Building Act / NCC / Queensland Development Code
 - Plumbing and Drainage Act
 - Water Supply Act (Unity Water)
+- WHS legislation (Safety in Design register is legally required)
 
 ---
 
-## Suggested App Architecture
+## Known / Likely Issues (as at 2026-03-30)
 
-### Recommended Tech Stack
-- **Frontend:** React + TypeScript, Tailwind CSS
-- **Backend:** Node.js/Express or Python/FastAPI
-- **Database:** PostgreSQL (relational data with strong FK relationships)
-- **File Import:** xlsx/openpyxl for initial Excel import
-- **Auth:** Simple JWT or session-based for multi-user access
-
-### Core Feature Modules (priority order)
-1. **Project Dashboard** — summary view of all active projects with key status indicators
-2. **C2C Fee Tracker** — weekly resourcing and fee burn with charts (under/over trend)
-3. **Deliverables Schedule** — drawing register with issue tracking
-4. **Approvals Tracker** — status board for statutory approvals
-5. **Critical Items Register** — kanban or table view with OPEN/CLOSED filter
-6. **Design Change Register** — with fee impact rollup per discipline
-7. **Brief Compliance Register** — checklist view
-8. **RFI Log** — with deadline tracking
-9. **SiD Register** — hazard register with risk matrix integration
-10. **Risk & Issue Register**
-11. **Value Log**
-12. **Lessons Learnt**
-
-### Data Import
-The app should be able to **import the existing Excel file** to seed a project. Parse each sheet and map to the corresponding data model above. This is the migration path for existing projects.
-
----
-
-## File Locations
-```
-Source Excel:   C:\Users\austin.carney\Projects\014_PCT_App\10162 - Project Control Tool.xlsx
-Project Root:   C:\Users\austin.carney\Projects\014_PCT_App\
-This file:      C:\Users\austin.carney\Projects\014_PCT_App\CLAUDE_CONTEXT.md
-```
-
----
-
-## Notes for Claude Code
-- When generating code, assume the Excel file may be re-imported for each new project — don't hardcode project-specific data
-- The C2C weekly snapshots are **immutable historical records** — each week's snapshot should be preserved, not overwritten
-- The "CS C2C" sheets (Construction Services) use a longer time horizon (W1–W21) vs design phase (W1–W12)
-- Many sheets are partially populated — the app should handle sparse/empty data gracefully
-- The tool is used by a **small team** of architects and engineers, so UX should prioritise speed of data entry over complexity
-- "Synergy" references in the C2C sheets refer to an internal financial tracking system — this is a fee management context, not a third-party software integration requirement
+- App is in active development — individual modules may have incomplete CRUD, missing validation, or UI rough edges
+- `fee_less_wip` in C2C financials uses a placeholder default of $1,000 — not connected to real billing data
+- `synergy_net_residual` field (design phase financial) references an internal finance system ("Synergy") — no integration exists yet
+- No password hashing — credentials are plain text in `.env` (acceptable for internal tool, not production)
+- No user management UI — users are managed by editing `.env` directly
+- Excel export (`excel.export.js` service) exists but export UI coverage across modules may be incomplete
+- Some registers (Risks, RFIs, Value Log) were lightly populated in seed data — may surface edge cases with empty states

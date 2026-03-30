@@ -591,12 +591,72 @@ function StageView({ data, isAdmin, onAdminUnlock, onAdminRelock, onUpdateAlloca
 
   return (
     <>
-      {/* Toolbar row — past-week toggle */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
+      {/* Toolbar row — legend + past-week toggle */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6, gap: 12, flexWrap: 'wrap' }}>
+
+        {/* Legend */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          {/* Past */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <div style={{ width: 32, height: 10, background: '#6b9e82', borderRadius: 2 }} />
+                <span style={{ fontSize: 9, color: 'var(--color-text-muted)' }}>header</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <div style={{ width: 32, height: 10, background: '#f0f4f1', border: '1px solid #c8d4cc', borderRadius: 2 }} />
+                <span style={{ fontSize: 9, color: 'var(--color-text-muted)' }}>field</span>
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text)' }}>Past week</div>
+              <div style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Excluded from CTC</div>
+            </div>
+          </div>
+          {/* Current */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <div style={{ width: 32, height: 10, background: '#d97706', borderRadius: 2 }} />
+                <span style={{ fontSize: 9, color: 'var(--color-text-muted)' }}>header</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <div style={{ width: 32, height: 10, background: 'rgba(217,119,6,0.07)', border: '1px solid rgba(217,119,6,0.3)', borderRadius: 2 }} />
+                <span style={{ fontSize: 9, color: 'var(--color-text-muted)' }}>field</span>
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text)' }}>Current week</div>
+              <div style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Included in CTC</div>
+            </div>
+          </div>
+          {/* Future */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <div style={{ width: 32, height: 10, background: 'var(--color-primary)', borderRadius: 2 }} />
+                <span style={{ fontSize: 9, color: 'var(--color-text-muted)' }}>header</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                <div style={{ width: 32, height: 10, background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 2 }} />
+                <span style={{ fontSize: 9, color: 'var(--color-text-muted)' }}>field</span>
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text)' }}>Future week</div>
+              <div style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Included in CTC</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--color-text-muted)', borderLeft: '1px solid var(--color-border)', paddingLeft: 12 }}>
+            CTC = hours × rate for current &amp; future weeks only
+          </div>
+        </div>
+
+        {/* Past-week toggle */}
         <button
           className="btn btn-ghost btn-sm"
           onClick={() => setShowPast(v => !v)}
-          style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}
+          style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}
         >
           <span style={{ fontSize: 14 }}>👁</span>
           {showPast ? 'Hide Past Weeks' : 'Show Past Weeks'}
